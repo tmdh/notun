@@ -16,16 +16,18 @@ If := 'if' Expression '{' ThenBranch '}' ('else' ElseBranch)?
 While := 'while' Expression '{' Statement '}'
 
 TODO:
-- Unary negate and bang
 - Function parameter and return type
-- Tuple type
-- Function call
-- Array constructor [1, 2, 3]
-- Multidimensional arrays
-- Array subscript index
-- Global variable declaration
 - Return statement
+- Function call
 - Statement := Assignment | Expression
+- Tuple type
+- Tuple constructor
+- Tuple indexing
+- Array type
+- Array constructor [1, 2, 3]
+- Array indexing
+- Multidimensional arrays
+- Global variable declaration
 */
 
 use crate::{
@@ -45,6 +47,7 @@ pub enum ParseError {
     ExpectedIdentifier,
     ExpectedToken(TokenKind),
     ExpectedElseBlock,
+    ExpectedExpression,
 }
 
 impl<T> Parser<T>
@@ -299,8 +302,53 @@ where
                 kind: TokenKind::Identifier { value },
                 ..
             }) => Ok(Expression::Var { name: value }),
-            _ => Err(ParseError::ExpectedToken(TokenKind::Integer { value: 0 })),
+            Some(Token {
+                kind: TokenKind::True,
+                ..
+            }) => Ok(Expression::Bool { value: true }),
+            Some(Token {
+                kind: TokenKind::False,
+                ..
+            }) => Ok(Expression::Bool { value: false }),
+            token @ Some(
+                Token {
+                    kind: TokenKind::Plus,
+                    ..
+                }
+                | Token {
+                    kind: TokenKind::Minus,
+                    ..
+                }
+                | Token {
+                    kind: TokenKind::Bang,
+                    ..
+                },
+            ) => {
+                let token = token.unwrap();
+                let ((), r_bp) = self.prefix_binding_power();
+                let rhs = self.parse_expression_bp(r_bp)?;
+                match token {
+                    Token {
+                        kind: TokenKind::Bang,
+                        ..
+                    } => Ok(Expression::NegateBang { value: rhs.into() }),
+                    Token {
+                        kind: TokenKind::Minus,
+                        ..
+                    } => Ok(Expression::NegateMinus { value: rhs.into() }),
+                    Token {
+                        kind: TokenKind::Plus,
+                        ..
+                    } => Ok(rhs),
+                    _ => panic!("no other token expected"),
+                }
+            }
+            _ => Err(ParseError::ExpectedExpression),
         }
+    }
+
+    fn prefix_binding_power(&self) -> ((), u8) {
+        ((), 11)
     }
 
     fn infix_binding_power(&self, op: &BinOp) -> (u8, u8) {

@@ -14,7 +14,7 @@ fn main() {
     }
 
     while a == b {
-        let c : u64 = 9
+        let c : u64 = !true
     }
 }";
     let tokenizer = lexer::make_tokenizer(SOURCE);

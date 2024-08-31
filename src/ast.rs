@@ -16,16 +16,16 @@ pub enum Statement {
         value: Expression,
     },
     Block {
-        statements: Vec<Statement>,
+        statements: Vec<Self>,
     },
     If {
         condition: Expression,
-        then_branch: Box<Statement>,
-        else_branch: Option<Box<Statement>>,
+        then_branch: Box<Self>,
+        else_branch: Option<Box<Self>>,
     },
     While {
         condition: Expression,
-        body: Box<Statement>,
+        body: Box<Self>,
     },
 }
 
@@ -57,9 +57,18 @@ pub enum Expression {
     Var {
         name: String,
     },
+    Bool {
+        value: bool,
+    },
     BinaryOperation {
         operator: BinOp,
-        left: Box<Expression>,
-        right: Box<Expression>,
+        left: Box<Self>,
+        right: Box<Self>,
+    },
+    NegateBang {
+        value: Box<Self>,
+    },
+    NegateMinus {
+        value: Box<Self>,
     },
 }
