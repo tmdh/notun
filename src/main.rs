@@ -3,7 +3,7 @@ mod lexer;
 mod parser;
 
 fn main() {
-    const SOURCE: &str = "fn main() {
+    const SOURCE: &str = "fn main(a: i64, b: (bool, u64)) -> (u64, u64) {
     let a : i64 = 1 + 2 * 3 + 5
     let b : i64 = 50 * -99
     let c : bool = 5 == 5

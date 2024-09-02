@@ -5,7 +5,12 @@ pub struct Module {
 
 #[derive(Debug)]
 pub enum Declaration {
-    Function { name: String, body: Statement },
+    Function {
+        name: String,
+        parameters: Vec<Parameter>,
+        body: Statement,
+        return_type: Type,
+    },
 }
 
 #[derive(Debug)]
@@ -71,4 +76,27 @@ pub enum Expression {
     NegateMinus {
         value: Box<Self>,
     },
+}
+
+#[derive(Debug)]
+pub enum Type {
+    Constructor(ConstructorType),
+    Tuple(TupleType),
+    Unit,
+}
+
+#[derive(Debug)]
+pub struct ConstructorType {
+    pub name: String,
+}
+
+#[derive(Debug)]
+pub struct TupleType {
+    pub types: Vec<Type>,
+}
+
+#[derive(Debug)]
+pub struct Parameter {
+    pub name: String,
+    pub type_: Type,
 }

@@ -6,21 +6,26 @@ fn main() {
 }
 
 Module := Declaration*
-Declaration := FunctionDeclaration // | GlobalDeclaration
-FunctionDeclaration := 'fn' Identifier FunctionParameters ('->' Type)? FunctionBody
-FunctionParameters := '(' (FunctionParameter (',' FunctionParameter)* ','?)? ')'
+Declaration := Function // | GlobalDeclaration
+Function := 'fn' Identifier Parameters ('->' Type)? FunctionBody
+Parameters := '(' (Parameter (',' Parameter)* ','?)? ')'
+Parameter := Identifier ':' Type
 FunctionBody := Block // | '=' Expression
+Type := Constructor | Tuple | Unit
+Tuple := '(' Type (',' Type)* ')'
+Unit := '(' ')'
 Block := '{' Statement* '}'
 Statement := Let | Block | If | While // | Assignment | Expression
+Expression := Int | Float | Var | Bool | BinaryOperation | NegateBang | NegateMinus | Call
+Call := Identifier '(' (Expression (',' Expression)* ','?)? ')'
+Let := 'let' Identifier ':' Type '=' Expression
 If := 'if' Expression '{' ThenBranch '}' ('else' ElseBranch)?
 While := 'while' Expression '{' Statement '}'
 
 TODO:
-- Function parameter and return type
 - Return statement
 - Function call
 - Statement := Assignment | Expression
-- Tuple type
 - Tuple constructor
 - Tuple indexing
 - Array type
@@ -31,7 +36,10 @@ TODO:
 */
 
 use crate::{
-    ast::{BinOp, Declaration, Expression, Module, Statement},
+    ast::{
+        BinOp, ConstructorType, Declaration, Expression, Module, Parameter, Statement, TupleType,
+        Type,
+    },
     lexer::{LexError, LexResult, Token, TokenKind},
 };
 
@@ -45,9 +53,13 @@ pub struct Parser<T: Iterator<Item = LexResult>> {
 #[derive(Debug)]
 pub enum ParseError {
     ExpectedIdentifier,
-    ExpectedToken(TokenKind),
+    ExpectedToken {
+        expected: TokenKind,
+        found: Option<Token>,
+    },
     ExpectedElseBlock,
     ExpectedExpression,
+    ExpectedTypeIdentifier,
 }
 
 impl<T> Parser<T>
@@ -112,13 +124,96 @@ where
     fn parse_function(&mut self) -> Result<Declaration, ParseError> {
         let name = self.expect_identifier()?;
         self.expect_token(TokenKind::LeftParen)?;
-        // TODO: parse arguments
+        let mut parameters = vec![];
+        while let Some(parameter) = self.parse_function_parameter()? {
+            parameters.push(parameter);
+            match self.tok0 {
+                Some(Token {
+                    kind: TokenKind::Comma,
+                    ..
+                }) => {
+                    self.next_token();
+                }
+                _ => break,
+            }
+        }
         self.expect_token(TokenKind::RightParen)?;
-        // TODO: parse return type
+        let mut return_type = None;
+        match self.tok0 {
+            Some(Token {
+                kind: TokenKind::RightArrow,
+                ..
+            }) => {
+                self.next_token();
+                return_type = Some(
+                    self.parse_type()?
+                        .ok_or(ParseError::ExpectedTypeIdentifier)?,
+                );
+            }
+            _ => {}
+        }
         self.expect_token(TokenKind::LeftBrace)?;
         let body = self.parse_block()?;
         self.expect_token(TokenKind::RightBrace)?;
-        Ok(Declaration::Function { name, body })
+        Ok(Declaration::Function {
+            name,
+            parameters,
+            body,
+            return_type: return_type.unwrap_or(Type::Unit),
+        })
+    }
+
+    fn parse_function_parameter(&mut self) -> Result<Option<Parameter>, ParseError> {
+        match &self.tok0 {
+            Some(Token {
+                kind: TokenKind::Identifier { value },
+                ..
+            }) => {
+                let name = value.clone();
+                self.next_token();
+                self.expect_token(TokenKind::Colon)?;
+                let type_ = self
+                    .parse_type()?
+                    .ok_or(ParseError::ExpectedTypeIdentifier)?;
+                Ok(Some(Parameter { name, type_ }))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    fn parse_type(&mut self) -> Result<Option<Type>, ParseError> {
+        match self.next_token() {
+            Some(Token {
+                kind: TokenKind::Identifier { value },
+                ..
+            }) => Ok(Some(Type::Constructor(ConstructorType { name: value }))),
+            Some(Token {
+                kind: TokenKind::LeftParen,
+                ..
+            }) => {
+                let mut types = vec![];
+                while let Some(type_) = self.parse_type()? {
+                    types.push(type_);
+                    match self.tok0 {
+                        Some(Token {
+                            kind: TokenKind::Comma,
+                            ..
+                        }) => {
+                            self.next_token();
+                        }
+                        _ => break,
+                    }
+                }
+                self.expect_token(TokenKind::RightParen)?;
+                let type_ = if types.len() == 0 {
+                    Type::Unit
+                } else {
+                    Type::Tuple(TupleType { types })
+                };
+                Ok(Some(type_))
+            }
+            _ => Ok(None),
+        }
     }
 
     fn parse_block(&mut self) -> Result<Statement, ParseError> {
@@ -376,10 +471,10 @@ where
         }
     }
 
-    fn expect_token(&mut self, token_kind: TokenKind) -> Result<(), ParseError> {
+    fn expect_token(&mut self, expected: TokenKind) -> Result<(), ParseError> {
         match self.next_token() {
-            Some(tok) if tok.kind == token_kind => Ok(()),
-            _ => Err(ParseError::ExpectedToken(token_kind)),
+            Some(tok) if tok.kind == expected => Ok(()),
+            found => Err(ParseError::ExpectedToken { expected, found }),
         }
     }
 }
