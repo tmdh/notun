@@ -32,6 +32,9 @@ pub enum Statement {
         condition: Expression,
         body: Box<Self>,
     },
+    Return {
+        return_value: Expression,
+    },
 }
 
 #[derive(Debug)]
@@ -75,6 +78,10 @@ pub enum Expression {
     },
     NegateMinus {
         value: Box<Self>,
+    },
+    Call {
+        name: String,
+        arguments: Vec<Expression>,
     },
 }
 

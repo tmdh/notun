@@ -23,8 +23,6 @@ If := 'if' Expression '{' ThenBranch '}' ('else' ElseBranch)?
 While := 'while' Expression '{' Statement '}'
 
 TODO:
-- Return statement
-- Function call
 - Statement := Assignment | Expression
 - Tuple constructor
 - Tuple indexing
@@ -247,6 +245,13 @@ where
                 self.next_token();
                 Ok(Some(self.parse_while_statement()?))
             }
+            Some(Token {
+                kind: TokenKind::Return,
+                ..
+            }) => {
+                self.next_token();
+                Ok(Some(self.parse_return_statement()?))
+            }
             _ => Ok(None),
         }
     }
@@ -298,6 +303,29 @@ where
             condition,
             body: body.into(),
         })
+    }
+
+    fn parse_return_statement(&mut self) -> Result<Statement, ParseError> {
+        let return_value = self.parse_expression()?;
+        Ok(Statement::Return { return_value })
+    }
+
+    fn parse_function_arguments(&mut self) -> Result<Vec<Expression>, ParseError> {
+        let mut arguments = vec![];
+        loop {
+            let argument = self.parse_expression()?;
+            arguments.push(argument);
+            match self.tok0 {
+                Some(Token {
+                    kind: TokenKind::Comma,
+                    ..
+                }) => {
+                    self.next_token();
+                }
+                _ => break,
+            }
+        }
+        Ok(arguments)
     }
 
     fn parse_expression(&mut self) -> Result<Expression, ParseError> {
@@ -396,7 +424,21 @@ where
             Some(Token {
                 kind: TokenKind::Identifier { value },
                 ..
-            }) => Ok(Expression::Var { name: value }),
+            }) => match self.tok0 {
+                Some(Token {
+                    kind: TokenKind::LeftParen,
+                    ..
+                }) => {
+                    self.next_token();
+                    let arguments = self.parse_function_arguments()?;
+                    self.expect_token(TokenKind::RightParen)?;
+                    Ok(Expression::Call {
+                        name: value,
+                        arguments,
+                    })
+                }
+                _ => Ok(Expression::Var { name: value }),
+            },
             Some(Token {
                 kind: TokenKind::True,
                 ..

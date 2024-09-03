@@ -16,6 +16,9 @@ fn main() {
     while a == b {
         let c : u64 = !true
     }
+
+    return 0
+    let a : u64 = sqrt(9) + b
 }";
     let tokenizer = lexer::make_tokenizer(SOURCE);
     let mut parser = parser::Parser::new(tokenizer);
