@@ -16,14 +16,16 @@ Tuple := '(' Type (',' Type)* ')'
 Unit := '(' ')'
 Block := '{' Statement* '}'
 Statement := Let | Block | If | While // | Assignment | Expression
-Expression := Int | Float | Var | Bool | BinaryOperation | NegateBang | NegateMinus | Call
+Expression := Int | Float | Var | Bool | BinaryOperation | NegateBang | NegateMinus | Call | TupleIndex
+TupleIndex := Expression '.' Get | Expression
 Call := Identifier '(' (Expression (',' Expression)* ','?)? ')'
 Let := 'let' Identifier ':' Type '=' Expression
 If := 'if' Expression '{' ThenBranch '}' ('else' ElseBranch)?
 While := 'while' Expression '{' Statement '}'
+Assignment :=
 
 TODO:
-- Statement := Assignment | Expression
+- Parens in expressions
 - Tuple constructor
 - Tuple indexing
 - Array type
@@ -99,6 +101,7 @@ where
                 }
             };
         }
+        println!("{:#?}", self.tok0);
         std::mem::replace(&mut self.tok0, std::mem::replace(&mut self.tok1, next))
     }
 
@@ -164,10 +167,10 @@ where
     fn parse_function_parameter(&mut self) -> Result<Option<Parameter>, ParseError> {
         match &self.tok0 {
             Some(Token {
-                kind: TokenKind::Identifier { value },
+                kind: TokenKind::Identifier { name },
                 ..
             }) => {
-                let name = value.clone();
+                let name = name.clone();
                 self.next_token();
                 self.expect_token(TokenKind::Colon)?;
                 let type_ = self
@@ -182,9 +185,9 @@ where
     fn parse_type(&mut self) -> Result<Option<Type>, ParseError> {
         match self.next_token() {
             Some(Token {
-                kind: TokenKind::Identifier { value },
+                kind: TokenKind::Identifier { name },
                 ..
-            }) => Ok(Some(Type::Constructor(ConstructorType { name: value }))),
+            }) => Ok(Some(Type::Constructor(ConstructorType { name }))),
             Some(Token {
                 kind: TokenKind::LeftParen,
                 ..
@@ -218,12 +221,19 @@ where
         let mut statements = vec![];
         while let Some(statement) = self.parse_statement()? {
             statements.push(statement);
+            match self.tok0 {
+                Some(Token {
+                    kind: TokenKind::RightBrace,
+                    ..
+                }) => break,
+                _ => {}
+            }
         }
         Ok(Statement::Block { statements })
     }
 
     fn parse_statement(&mut self) -> Result<Option<Statement>, ParseError> {
-        match self.tok0 {
+        match &self.tok0 {
             Some(Token {
                 kind: TokenKind::Let,
                 ..
@@ -252,7 +262,26 @@ where
                 self.next_token();
                 Ok(Some(self.parse_return_statement()?))
             }
-            _ => Ok(None),
+            Some(c) => {
+                if !c.kind.is_expression_start() {
+                    panic!("Statement doesn't start as an expression, found: {:#?}", c);
+                }
+                let lhs = self.parse_expression()?;
+                match self.tok0 {
+                    Some(Token {
+                        kind: TokenKind::Equal,
+                        ..
+                    }) => {
+                        self.next_token();
+                        let rhs = self.parse_expression()?;
+                        return Ok(Some(Statement::Assignment { lhs, rhs }));
+                    }
+                    _ => {
+                        return Ok(Some(Statement::Expression(lhs)));
+                    }
+                }
+            }
+            _ => todo!(),
         }
     }
 
@@ -268,6 +297,12 @@ where
             value,
         })
     }
+
+    // fn parse_assignment_statement(&mut self, name: String) -> Result<Statement, ParseError> {
+    //     self.expect_token(TokenKind::Equal)?;
+    //     let value = self.parse_expression()?;
+    //     Ok(Statement::Assignment { name, value })
+    // }
 
     fn parse_if_statement(&mut self) -> Result<Statement, ParseError> {
         let condition = self.parse_expression()?;
@@ -389,6 +424,10 @@ where
                     kind: TokenKind::AmpersandAmpersand,
                     ..
                 }) => BinOp::LogicalAnd,
+                Some(Token {
+                    kind: TokenKind::Dot,
+                    ..
+                }) => BinOp::Dot,
                 _ => break,
             };
 
@@ -422,7 +461,7 @@ where
                 ..
             }) => Ok(Expression::Float { value }),
             Some(Token {
-                kind: TokenKind::Identifier { value },
+                kind: TokenKind::Identifier { name },
                 ..
             }) => match self.tok0 {
                 Some(Token {
@@ -432,12 +471,9 @@ where
                     self.next_token();
                     let arguments = self.parse_function_arguments()?;
                     self.expect_token(TokenKind::RightParen)?;
-                    Ok(Expression::Call {
-                        name: value,
-                        arguments,
-                    })
+                    Ok(Expression::Call { name, arguments })
                 }
-                _ => Ok(Expression::Var { name: value }),
+                _ => Ok(Expression::Var { name }),
             },
             Some(Token {
                 kind: TokenKind::True,
@@ -500,15 +536,16 @@ where
             | BinOp::GreaterEqual => (5, 6),
             BinOp::Add | BinOp::Subtract => (7, 8),
             BinOp::Multiply | BinOp::Divide | BinOp::Modulo => (9, 10),
+            BinOp::Dot => (14, 13),
         }
     }
 
     fn expect_identifier(&mut self) -> Result<String, ParseError> {
         match self.next_token() {
             Some(Token {
-                kind: TokenKind::Identifier { value },
+                kind: TokenKind::Identifier { name },
                 ..
-            }) => Ok(value),
+            }) => Ok(name),
             _ => Err(ParseError::ExpectedIdentifier),
         }
     }

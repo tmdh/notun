@@ -20,6 +20,11 @@ pub enum Statement {
         type_: String,
         value: Expression,
     },
+    Assignment {
+        lhs: Expression,
+        rhs: Expression,
+    },
+    Expression(Expression),
     Block {
         statements: Vec<Self>,
     },
@@ -52,6 +57,7 @@ pub enum BinOp {
     GreaterEqual,
     EqualEqual,
     NotEqual,
+    Dot,
 }
 
 #[derive(Debug)]

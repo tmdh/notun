@@ -43,7 +43,7 @@ pub enum TokenKind {
 
     Integer { value: i64 },
     Float { value: f64 },
-    Identifier { value: String },
+    Identifier { name: String },
 }
 
 impl TokenKind {
@@ -58,6 +58,21 @@ impl TokenKind {
             "true" => Some(TokenKind::True),
             "false" => Some(TokenKind::False),
             _ => None,
+        }
+    }
+
+    pub fn is_expression_start(&self) -> bool {
+        use TokenKind::*;
+        match self {
+            Integer { .. }
+            | Float { .. }
+            | Identifier { .. }
+            | True
+            | False
+            | Plus
+            | Minus
+            | Bang => true,
+            _ => false,
         }
     }
 }
@@ -192,10 +207,10 @@ where
                 check_for_minus = true;
                 let token = self.lex_identifier()?;
                 self.add_token(token);
-                // self.lex_maybe_dot_access();
+                self.lex_maybe_dot_access();
             } else if is_number_start(c, self.chr1) {
                 check_for_minus = true;
-                let token = self.lex_number()?;
+                let token = self.lex_number(true)?;
                 self.add_token(token);
             } else {
                 self.consume_character(c)?;
@@ -226,7 +241,7 @@ where
     }
 
     fn lex_identifier(&mut self) -> LexResult {
-        let mut identifier = String::new();
+        let mut name = String::new();
         let start = self.get_pos();
 
         while self
@@ -234,23 +249,23 @@ where
             .map(|c| matches!(c, '_' | 'a'..='z' | 'A'..='Z' | '0'..='9'))
             .unwrap_or(false)
         {
-            identifier.push(self.next_char().unwrap());
+            name.push(self.next_char().unwrap());
         }
 
         let end = self.get_pos();
 
-        if let Some(kind) = TokenKind::from_keyword(&identifier) {
+        if let Some(kind) = TokenKind::from_keyword(&name) {
             Ok(Token { kind, start, end })
         } else {
             Ok(Token {
-                kind: TokenKind::Identifier { value: identifier },
+                kind: TokenKind::Identifier { name },
                 start,
                 end,
             })
         }
     }
 
-    fn lex_number(&mut self) -> LexResult {
+    fn lex_number(&mut self, maybe_float: bool) -> LexResult {
         let start = self.get_pos();
         let mut value = String::new();
 
@@ -262,6 +277,17 @@ where
 
         while matches!(self.chr0, Some('0'..='9')) {
             value.push(self.next_char().unwrap());
+        }
+
+        if !maybe_float {
+            let end = self.get_pos();
+            return Ok(Token {
+                kind: TokenKind::Integer {
+                    value: value.parse().map_err(|e| LexError::ParseIntegerError(e))?,
+                },
+                start,
+                end,
+            });
         }
 
         if self.chr0 == Some('.') {
@@ -294,6 +320,19 @@ where
                 end,
             })
         }
+    }
+
+    fn lex_maybe_dot_access(&mut self) -> Result<(), LexError> {
+        loop {
+            if self.chr0 == Some('.') && matches!(self.chr1, Some('0'..='9')) {
+                self.eat_single_char(TokenKind::Dot);
+                let token = self.lex_number(false)?;
+                self.add_token(token);
+            } else {
+                break;
+            }
+        }
+        Ok(())
     }
 
     fn consume_character(&mut self, c: char) -> Result<(), LexError> {
