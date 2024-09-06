@@ -22,12 +22,8 @@ Call := Identifier '(' (Expression (',' Expression)* ','?)? ')'
 Let := 'let' Identifier ':' Type '=' Expression
 If := 'if' Expression '{' ThenBranch '}' ('else' ElseBranch)?
 While := 'while' Expression '{' Statement '}'
-Assignment :=
 
 TODO:
-- Parens in expressions
-- Tuple constructor
-- Tuple indexing
 - Array type
 - Array constructor [1, 2, 3]
 - Array indexing
@@ -298,12 +294,6 @@ where
         })
     }
 
-    // fn parse_assignment_statement(&mut self, name: String) -> Result<Statement, ParseError> {
-    //     self.expect_token(TokenKind::Equal)?;
-    //     let value = self.parse_expression()?;
-    //     Ok(Statement::Assignment { name, value })
-    // }
-
     fn parse_if_statement(&mut self) -> Result<Statement, ParseError> {
         let condition = self.parse_expression()?;
         self.expect_token(TokenKind::LeftBrace)?;
@@ -483,6 +473,33 @@ where
                 kind: TokenKind::False,
                 ..
             }) => Ok(Expression::Bool { value: false }),
+            Some(Token {
+                kind: TokenKind::LeftParen,
+                ..
+            }) => {
+                let mut values = vec![];
+                loop {
+                    let value = self.parse_expression()?;
+                    values.push(value);
+                    if matches!(
+                        self.tok0,
+                        Some(Token {
+                            kind: TokenKind::Comma,
+                            ..
+                        })
+                    ) {
+                        self.next_token();
+                    } else {
+                        break;
+                    }
+                }
+                self.expect_token(TokenKind::RightParen)?;
+                if values.len() == 1 {
+                    Ok(values.pop().unwrap())
+                } else {
+                    Ok(Expression::Tuple { values })
+                }
+            }
             token @ Some(
                 Token {
                     kind: TokenKind::Plus,

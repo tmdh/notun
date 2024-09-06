@@ -19,7 +19,7 @@ fn main() {
         let c : u64 = !true
     }
     let a : u64 = sqrt(9) + 4
-    let b : u64 = a.0.1
+    let b : u64 = (9, true)
     sqrt(9)
 }";
     let tokenizer = lexer::make_tokenizer(SOURCE);

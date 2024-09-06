@@ -89,6 +89,9 @@ pub enum Expression {
         name: String,
         arguments: Vec<Expression>,
     },
+    Tuple {
+        values: Vec<Expression>,
+    },
 }
 
 #[derive(Debug)]
