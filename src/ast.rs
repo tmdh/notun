@@ -8,8 +8,13 @@ pub enum Declaration {
     Function {
         name: String,
         parameters: Vec<Parameter>,
-        body: Statement,
         return_type: Type,
+        body: Statement,
+    },
+    Global {
+        name: String,
+        type_: Type,
+        value: Expression,
     },
 }
 
@@ -17,7 +22,7 @@ pub enum Declaration {
 pub enum Statement {
     Let {
         name: String,
-        type_: String,
+        type_: Type,
         value: Expression,
     },
     Assignment {
@@ -58,6 +63,7 @@ pub enum BinOp {
     EqualEqual,
     NotEqual,
     Dot,
+    ArraySubscript,
 }
 
 #[derive(Debug)]
@@ -85,6 +91,9 @@ pub enum Expression {
     NegateMinus {
         value: Box<Self>,
     },
+    Positive {
+        value: Box<Self>,
+    },
     Call {
         name: String,
         arguments: Vec<Expression>,
@@ -92,12 +101,24 @@ pub enum Expression {
     Tuple {
         values: Vec<Expression>,
     },
+    Array {
+        values: Vec<Expression>,
+    },
+    TupleIndex {
+        tuple: Box<Expression>,
+        index: Box<Expression>,
+    },
+    ArraySubscript {
+        array: Box<Expression>,
+        index: Box<Expression>,
+    },
 }
 
 #[derive(Debug)]
 pub enum Type {
     Constructor(ConstructorType),
     Tuple(TupleType),
+    Array(ArrayType),
     Unit,
 }
 
@@ -109,6 +130,12 @@ pub struct ConstructorType {
 #[derive(Debug)]
 pub struct TupleType {
     pub types: Vec<Type>,
+}
+
+#[derive(Debug)]
+pub struct ArrayType {
+    pub type_: Box<Type>,
+    pub length: Vec<Expression>,
 }
 
 #[derive(Debug)]

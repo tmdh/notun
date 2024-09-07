@@ -1,10 +1,5 @@
 /*
-fn main() {
-    let a : i64 = 5
-    let b : i64 = 6
-    print(a)
-}
-
+// TODO: Fix grammar definitions
 Module := Declaration*
 Declaration := Function // | GlobalDeclaration
 Function := 'fn' Identifier Parameters ('->' Type)? FunctionBody
@@ -23,18 +18,12 @@ Let := 'let' Identifier ':' Type '=' Expression
 If := 'if' Expression '{' ThenBranch '}' ('else' ElseBranch)?
 While := 'while' Expression '{' Statement '}'
 
-TODO:
-- Array type
-- Array constructor [1, 2, 3]
-- Array indexing
-- Multidimensional arrays
-- Global variable declaration
 */
 
 use crate::{
     ast::{
-        BinOp, ConstructorType, Declaration, Expression, Module, Parameter, Statement, TupleType,
-        Type,
+        ArrayType, BinOp, ConstructorType, Declaration, Expression, Module, Parameter, Statement,
+        TupleType, Type,
     },
     lexer::{LexError, LexResult, Token, TokenKind},
 };
@@ -56,6 +45,7 @@ pub enum ParseError {
     ExpectedElseBlock,
     ExpectedExpression,
     ExpectedTypeIdentifier,
+    UnitArrayError,
 }
 
 impl<T> Parser<T>
@@ -97,7 +87,7 @@ where
                 }
             };
         }
-        println!("{:#?}", self.tok0);
+        // println!("{:#?}", self.tok0);
         std::mem::replace(&mut self.tok0, std::mem::replace(&mut self.tok1, next))
     }
 
@@ -112,10 +102,32 @@ where
                     let function = self.parse_function()?;
                     declarations.push(function);
                 }
+                Some(Token {
+                    kind: TokenKind::Let,
+                    ..
+                }) => {
+                    let global = self.parse_global_declaration()?;
+                    declarations.push(global);
+                }
                 _ => break,
             }
         }
         Ok(Module { declarations })
+    }
+
+    fn parse_global_declaration(&mut self) -> Result<Declaration, ParseError> {
+        let identifier = self.expect_identifier()?;
+        self.expect_token(TokenKind::Colon)?;
+        let type_ = self
+            .parse_type()?
+            .ok_or(ParseError::ExpectedTypeIdentifier)?;
+        self.expect_token(TokenKind::Equal)?;
+        let value = self.parse_expression()?;
+        Ok(Declaration::Global {
+            name: identifier,
+            type_,
+            value,
+        })
     }
 
     fn parse_function(&mut self) -> Result<Declaration, ParseError> {
@@ -183,7 +195,34 @@ where
             Some(Token {
                 kind: TokenKind::Identifier { name },
                 ..
-            }) => Ok(Some(Type::Constructor(ConstructorType { name }))),
+            }) => {
+                let mut type_ = Type::Constructor(ConstructorType { name });
+                while matches!(
+                    self.tok0,
+                    Some(Token {
+                        kind: TokenKind::LeftSquare,
+                        ..
+                    })
+                ) {
+                    self.next_token();
+                    let length = self.parse_expression()?;
+                    self.expect_token(TokenKind::RightSquare)?;
+                    match type_ {
+                        Type::Constructor(..) | Type::Tuple(..) => {
+                            type_ = Type::Array(ArrayType {
+                                type_: type_.into(),
+                                length: vec![],
+                            })
+                        }
+                        Type::Array(mut array) => {
+                            array.length.push(length);
+                            type_ = Type::Array(array);
+                        }
+                        Type::Unit => return Err(ParseError::UnitArrayError),
+                    }
+                }
+                Ok(Some(type_))
+            }
             Some(Token {
                 kind: TokenKind::LeftParen,
                 ..
@@ -284,7 +323,9 @@ where
     fn parse_let_statement(&mut self) -> Result<Statement, ParseError> {
         let identifier = self.expect_identifier()?;
         self.expect_token(TokenKind::Colon)?;
-        let type_ = self.expect_identifier()?;
+        let type_ = self
+            .parse_type()?
+            .ok_or(ParseError::ExpectedTypeIdentifier)?;
         self.expect_token(TokenKind::Equal)?;
         let value = self.parse_expression()?;
         Ok(Statement::Let {
@@ -418,23 +459,53 @@ where
                     kind: TokenKind::Dot,
                     ..
                 }) => BinOp::Dot,
+                Some(Token {
+                    kind: TokenKind::LeftSquare,
+                    ..
+                }) => BinOp::ArraySubscript,
                 _ => break,
             };
 
-            let (l_bp, r_bp) = self.infix_binding_power(&op);
-            if l_bp < min_bp {
-                break;
+            if let Some((l_bp, _)) = self.postfix_binding_power(&op) {
+                if l_bp < min_bp {
+                    break;
+                }
+                self.next_token();
+                lhs = match op {
+                    BinOp::ArraySubscript => {
+                        let index = self.parse_expression()?;
+                        self.expect_token(TokenKind::RightSquare)?;
+                        Expression::ArraySubscript {
+                            array: lhs.into(),
+                            index: index.into(),
+                        }
+                    }
+                    _ => panic!("Postfix {:#?} in expressions is not supported.", op),
+                };
+                continue;
             }
 
-            self.next_token();
+            if let Some((l_bp, r_bp)) = self.infix_binding_power(&op) {
+                if l_bp < min_bp {
+                    break;
+                }
+                self.next_token();
+                let rhs = self.parse_expression_bp(r_bp)?;
+                lhs = match op {
+                    BinOp::Dot => Expression::TupleIndex {
+                        tuple: lhs.into(),
+                        index: rhs.into(),
+                    },
+                    _ => Expression::BinaryOperation {
+                        operator: op,
+                        left: Box::new(lhs),
+                        right: Box::new(rhs),
+                    },
+                };
+                continue;
+            }
 
-            let rhs = self.parse_expression_bp(r_bp)?;
-
-            lhs = Expression::BinaryOperation {
-                operator: op,
-                left: Box::new(lhs),
-                right: Box::new(rhs),
-            };
+            break;
         }
 
         Ok(lhs)
@@ -500,6 +571,29 @@ where
                     Ok(Expression::Tuple { values })
                 }
             }
+            Some(Token {
+                kind: TokenKind::LeftSquare,
+                ..
+            }) => {
+                let mut values = vec![];
+                loop {
+                    let value = self.parse_expression()?;
+                    values.push(value);
+                    if matches!(
+                        self.tok0,
+                        Some(Token {
+                            kind: TokenKind::Comma,
+                            ..
+                        })
+                    ) {
+                        self.next_token();
+                    } else {
+                        break;
+                    }
+                }
+                self.expect_token(TokenKind::RightSquare)?;
+                Ok(Expression::Array { values })
+            }
             token @ Some(
                 Token {
                     kind: TokenKind::Plus,
@@ -515,7 +609,12 @@ where
                 },
             ) => {
                 let token = token.unwrap();
-                let ((), r_bp) = self.prefix_binding_power();
+
+                let r_bp = if let Some(((), r_bp)) = self.prefix_binding_power(&token.kind) {
+                    r_bp
+                } else {
+                    return Err(ParseError::ExpectedExpression);
+                };
                 let rhs = self.parse_expression_bp(r_bp)?;
                 match token {
                     Token {
@@ -529,7 +628,7 @@ where
                     Token {
                         kind: TokenKind::Plus,
                         ..
-                    } => Ok(rhs),
+                    } => Ok(Expression::Positive { value: rhs.into() }),
                     _ => panic!("no other token expected"),
                 }
             }
@@ -537,12 +636,16 @@ where
         }
     }
 
-    fn prefix_binding_power(&self) -> ((), u8) {
-        ((), 11)
+    fn prefix_binding_power(&self, kind: &TokenKind) -> Option<((), u8)> {
+        use TokenKind::*;
+        match kind {
+            Bang | Plus | Minus => Some(((), 11)),
+            _ => None,
+        }
     }
 
-    fn infix_binding_power(&self, op: &BinOp) -> (u8, u8) {
-        match op {
+    fn infix_binding_power(&self, op: &BinOp) -> Option<(u8, u8)> {
+        let res = match op {
             BinOp::LogicalOr => (1, 2),
             BinOp::LogicalAnd => (3, 4),
             BinOp::EqualEqual
@@ -553,7 +656,16 @@ where
             | BinOp::GreaterEqual => (5, 6),
             BinOp::Add | BinOp::Subtract => (7, 8),
             BinOp::Multiply | BinOp::Divide | BinOp::Modulo => (9, 10),
-            BinOp::Dot => (14, 13),
+            BinOp::Dot => (16, 15),
+            _ => return None,
+        };
+        Some(res)
+    }
+
+    fn postfix_binding_power(&self, op: &BinOp) -> Option<(u8, ())> {
+        match op {
+            BinOp::ArraySubscript => Some((13, ())),
+            _ => None,
         }
     }
 

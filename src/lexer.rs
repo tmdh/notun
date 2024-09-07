@@ -207,7 +207,7 @@ where
                 check_for_minus = true;
                 let token = self.lex_identifier()?;
                 self.add_token(token);
-                self.lex_maybe_dot_access();
+                self.lex_maybe_dot_access()?;
             } else if is_number_start(c, self.chr1) {
                 check_for_minus = true;
                 let token = self.lex_number(true)?;
@@ -338,11 +338,17 @@ where
     fn consume_character(&mut self, c: char) -> Result<(), LexError> {
         match c {
             '(' => self.eat_single_char(TokenKind::LeftParen),
-            ')' => self.eat_single_char(TokenKind::RightParen),
+            ')' => {
+                self.eat_single_char(TokenKind::RightParen);
+                self.lex_maybe_dot_access()?;
+            }
             '{' => self.eat_single_char(TokenKind::LeftBrace),
             '}' => self.eat_single_char(TokenKind::RightBrace),
             '[' => self.eat_single_char(TokenKind::LeftSquare),
-            ']' => self.eat_single_char(TokenKind::RightSquare),
+            ']' => {
+                self.eat_single_char(TokenKind::RightSquare);
+                self.lex_maybe_dot_access()?;
+            }
             '+' => self.eat_single_char(TokenKind::Plus),
             '*' => self.eat_single_char(TokenKind::Star),
             '/' => self.eat_single_char(TokenKind::Slash),
