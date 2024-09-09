@@ -205,17 +205,17 @@ where
                     })
                 ) {
                     self.next_token();
-                    let length = self.parse_expression()?;
+                    let dimension = self.parse_expression()?;
                     self.expect_token(TokenKind::RightSquare)?;
                     match type_ {
                         Type::Constructor(..) | Type::Tuple(..) => {
                             type_ = Type::Array(ArrayType {
                                 type_: type_.into(),
-                                length: vec![],
+                                dimensions: vec![dimension],
                             })
                         }
                         Type::Array(mut array) => {
-                            array.length.push(length);
+                            array.dimensions.push(dimension);
                             type_ = Type::Array(array);
                         }
                         Type::Unit => return Err(ParseError::UnitArrayError),

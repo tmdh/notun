@@ -135,7 +135,7 @@ pub struct TupleType {
 #[derive(Debug)]
 pub struct ArrayType {
     pub type_: Box<Type>,
-    pub length: Vec<Expression>,
+    pub dimensions: Vec<Expression>,
 }
 
 #[derive(Debug)]
