@@ -80,8 +80,8 @@ impl TokenKind {
 #[derive(Debug)]
 pub struct Token {
     pub kind: TokenKind,
-    start: u32,
-    end: u32,
+    pub start: u32,
+    pub end: u32,
 }
 
 pub struct NewlineHandler<T: Iterator<Item = (u32, char)>> {

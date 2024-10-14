@@ -22,8 +22,8 @@ While := 'while' Expression '{' Statement '}'
 
 use crate::{
     ast::{
-        ArrayType, BinOp, ConstructorType, Declaration, Expression, Module, Parameter, Statement,
-        TupleType, Type,
+        ArrayType, BinOp, ConstructorType, Declaration, Expression, Module, Parameter, SrcSpan,
+        Statement, TupleType, Type,
     },
     lexer::{LexError, LexResult, Token, TokenKind},
 };
@@ -46,6 +46,21 @@ pub enum ParseError {
     ExpectedExpression,
     ExpectedTypeIdentifier,
     UnitArrayError,
+}
+
+impl std::fmt::Display for ParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseError::ExpectedIdentifier => write!(f, "Expected identifier"),
+            ParseError::ExpectedToken { expected, found } => {
+                write!(f, "Expected token {:?}, found {:?}", expected, found)
+            }
+            ParseError::ExpectedElseBlock => write!(f, "Expected else block"),
+            ParseError::ExpectedExpression => write!(f, "Expected expression"),
+            ParseError::ExpectedTypeIdentifier => write!(f, "Expected type identifier"),
+            ParseError::UnitArrayError => write!(f, "Cannot create array of unit type"),
+        }
+    }
 }
 
 impl<T> Parser<T>
@@ -97,16 +112,18 @@ where
             match self.next_token() {
                 Some(Token {
                     kind: TokenKind::Fn,
+                    start,
                     ..
                 }) => {
-                    let function = self.parse_function()?;
+                    let function = self.parse_function(start)?;
                     declarations.push(function);
                 }
                 Some(Token {
                     kind: TokenKind::Let,
+                    start,
                     ..
                 }) => {
-                    let global = self.parse_global_declaration()?;
+                    let global = self.parse_global_declaration(start)?;
                     declarations.push(global);
                 }
                 _ => break,
@@ -115,7 +132,7 @@ where
         Ok(Module { declarations })
     }
 
-    fn parse_global_declaration(&mut self) -> Result<Declaration, ParseError> {
+    fn parse_global_declaration(&mut self, start: u32) -> Result<Declaration, ParseError> {
         let identifier = self.expect_identifier()?;
         self.expect_token(TokenKind::Colon)?;
         let type_ = self
@@ -124,13 +141,17 @@ where
         self.expect_token(TokenKind::Equal)?;
         let value = self.parse_expression()?;
         Ok(Declaration::Global {
+            location: SrcSpan {
+                start,
+                end: value.location().end,
+            },
             name: identifier,
             type_,
             value,
         })
     }
 
-    fn parse_function(&mut self) -> Result<Declaration, ParseError> {
+    fn parse_function(&mut self, start: u32) -> Result<Declaration, ParseError> {
         let name = self.expect_identifier()?;
         self.expect_token(TokenKind::LeftParen)?;
         let mut parameters = vec![];
@@ -161,10 +182,11 @@ where
             }
             _ => {}
         }
-        self.expect_token(TokenKind::LeftBrace)?;
-        let body = self.parse_block()?;
-        self.expect_token(TokenKind::RightBrace)?;
+        let (block_start, _) = self.expect_token(TokenKind::LeftBrace)?;
+        let body = self.parse_block(block_start)?;
+        let (_, end) = self.expect_token(TokenKind::RightBrace)?;
         Ok(Declaration::Function {
+            location: SrcSpan { start, end },
             name,
             parameters,
             body,
@@ -252,19 +274,30 @@ where
         }
     }
 
-    fn parse_block(&mut self) -> Result<Statement, ParseError> {
+    fn parse_block(&mut self, start: u32) -> Result<Statement, ParseError> {
         let mut statements = vec![];
+        let mut block_end = 0;
         while let Some(statement) = self.parse_statement()? {
             statements.push(statement);
             match self.tok0 {
                 Some(Token {
                     kind: TokenKind::RightBrace,
+                    end,
                     ..
-                }) => break,
+                }) => {
+                    block_end = end;
+                    break;
+                }
                 _ => {}
             }
         }
-        Ok(Statement::Block { statements })
+        Ok(Statement::Block {
+            location: SrcSpan {
+                start,
+                end: block_end,
+            },
+            statements,
+        })
     }
 
     fn parse_statement(&mut self) -> Result<Option<Statement>, ParseError> {
@@ -679,9 +712,9 @@ where
         }
     }
 
-    fn expect_token(&mut self, expected: TokenKind) -> Result<(), ParseError> {
+    fn expect_token(&mut self, expected: TokenKind) -> Result<(u32, u32), ParseError> {
         match self.next_token() {
-            Some(tok) if tok.kind == expected => Ok(()),
+            Some(tok) if tok.kind == expected => Ok((tok.start, tok.end)),
             found => Err(ParseError::ExpectedToken { expected, found }),
         }
     }
