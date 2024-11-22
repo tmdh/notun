@@ -5,24 +5,30 @@ pub struct Module {
 
 #[derive(Debug)]
 pub enum Declaration {
-    Function {
-        name: String,
-        parameters: Vec<Parameter>,
-        return_type: Type,
-        body: Statement,
-    },
-    Global {
-        name: String,
-        type_: Type,
-        value: Expression,
-    },
+    Function(Function),
+    Constant(Constant),
+}
+
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub name: String,
+    pub parameters: Vec<Parameter>,
+    pub return_type: TypeAst,
+    pub body: Statement,
 }
 
 #[derive(Debug)]
+pub struct Constant {
+    pub name: String,
+    pub type_: TypeAst,
+    pub value: Expression,
+}
+
+#[derive(Debug, Clone)]
 pub enum Statement {
     Let {
         name: String,
-        type_: Type,
+        type_: TypeAst,
         value: Expression,
     },
     Assignment {
@@ -47,7 +53,7 @@ pub enum Statement {
     },
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum BinOp {
     Add,
     Subtract,
@@ -66,7 +72,7 @@ pub enum BinOp {
     ArraySubscript,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expression {
     Integer {
         value: i64,
@@ -114,32 +120,32 @@ pub enum Expression {
     },
 }
 
-#[derive(Debug)]
-pub enum Type {
-    Constructor(ConstructorType),
-    Tuple(TupleType),
-    Array(ArrayType),
+#[derive(Debug, Clone)]
+pub enum TypeAst {
+    Constructor(ConstructorTypeAst),
+    Tuple(TupleTypeAst),
+    Array(ArrayTypeAst),
     Unit,
 }
 
-#[derive(Debug)]
-pub struct ConstructorType {
+#[derive(Debug, Clone)]
+pub struct ConstructorTypeAst {
     pub name: String,
 }
 
-#[derive(Debug)]
-pub struct TupleType {
-    pub types: Vec<Type>,
+#[derive(Debug, Clone)]
+pub struct TupleTypeAst {
+    pub types: Vec<TypeAst>,
 }
 
-#[derive(Debug)]
-pub struct ArrayType {
-    pub type_: Box<Type>,
+#[derive(Debug, Clone)]
+pub struct ArrayTypeAst {
+    pub type_: Box<TypeAst>,
     pub dimensions: Vec<Expression>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Parameter {
     pub name: String,
-    pub type_: Type,
+    pub type_: TypeAst,
 }

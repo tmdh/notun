@@ -1,32 +1,50 @@
+use type_checker::TypeChecker;
+
 mod ast;
+mod environment;
 mod lexer;
 mod parser;
+mod type_checker;
 
 fn main() {
+    // const SOURCE: &str = "
+    // let a: Int64 = 50
+
+    // fn main(a: Int64, b: (Bool, Int64)) -> (Int64, Int64) {
+    //     let a: Int64 = 1 + 2 * 3 + 5
+    //     let b: Int64 = 50 * -99
+    //     let b: Int64 = -a
+
+    //     if a == b {
+    //         let b: Int64 = 6
+    //     }
+    //     while a == b {
+    //         let c: Int64 = !true
+    //     }
+    //     let a: Int64 = sqrt(9) + 4
+    //     let b: Int64 = (9, true)
+    //     sqrt(9)
+    //     let a: Int64[3][3] = [[1, 2, 3]]
+    //     a = sqrt([9, 16])[0]
+    //     a = a[0].0.1
+    // }";
     const SOURCE: &str = "
-    let a : u64 = 50
-    fn main(a: i64, b: (bool, u64)) -> (u64, u64) {
-
-        let a : i64 = 1 + 2 * 3 + 5
-        let b : i64 = 50 * -99
-        let b : i64 = -a
-
-        if a == b {
-            let b : u64 = 6
-        }
-        while a == b {
-            let c : u64 = !true
-        }
-        let a : u64 = sqrt(9) + 4
-        let b : u64 = (9, true)
-        sqrt(9)
-
-        let a: u64[3][3] = [[1, 2, 3]]
-        a = sqrt([9, 16])[0]
-        a = a[0].0.1
+    fn main(a: Int64, b: (Bool, Int64)) -> (Int64, Int64) {
+        let a: Int64 = 1 + 2 * 3 + 5
+        let b: Int64 = 50 * -99
+        let b: Int64 = -a
+        let f: Bool = 5
     }";
     let tokenizer = lexer::make_tokenizer(SOURCE);
     let mut parser = parser::Parser::new(tokenizer);
-    let module = parser.parse_module();
-    println!("{:#?}", module);
+    let module = parser.parse_module().expect("Error parsing");
+    let mut type_checker = TypeChecker::new();
+    let typed_module = type_checker.visit_module(module);
+    if type_checker.errors.len() > 0 {
+        for error in type_checker.errors {
+            println!("{:#?}", error);
+        }
+    } else {
+        println!("{:#?}", typed_module.unwrap());
+    }
 }

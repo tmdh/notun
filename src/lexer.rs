@@ -151,7 +151,7 @@ pub enum LexError {
     MultipleDecimalPointError,
     ParseFloatError(ParseFloatError),
     ParseIntegerError(ParseIntError),
-    UnrecognizedTokenError(u32),
+    UnrecognizedTokenError(u32, char),
 }
 
 pub type LexResult = Result<Token, LexError>;
@@ -430,7 +430,7 @@ where
                         self.next_char();
                         TokenKind::PipePipe
                     }
-                    _ => return Err(LexError::UnrecognizedTokenError(self.get_pos())),
+                    _ => return Err(LexError::UnrecognizedTokenError(self.get_pos(), '|')),
                 };
                 let end = self.get_pos();
                 self.add_token(Token { kind, start, end });
@@ -443,7 +443,7 @@ where
                         self.next_char();
                         TokenKind::AmpersandAmpersand
                     }
-                    _ => return Err(LexError::UnrecognizedTokenError(self.get_pos())),
+                    _ => return Err(LexError::UnrecognizedTokenError(self.get_pos(), '&')),
                 };
                 let end = self.get_pos();
                 self.add_token(Token { kind, start, end });
@@ -460,7 +460,7 @@ where
                     });
                 }
             }
-            _ => return Err(LexError::UnrecognizedTokenError(self.get_pos())),
+            _ => return Err(LexError::UnrecognizedTokenError(self.get_pos(), ' ')),
         }
         Ok(())
     }
@@ -496,7 +496,7 @@ pub fn make_tokenizer(source: &str) -> impl Iterator<Item = LexResult> + '_ {
 }
 
 fn is_identifier_start(c: char) -> bool {
-    matches!(c, '_' | 'a'..='z')
+    matches!(c, '_' | 'a'..='z' | 'A'..='Z')
 }
 
 fn is_number_start(c0: char, c1: Option<char>) -> bool {

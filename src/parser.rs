@@ -22,8 +22,8 @@ While := 'while' Expression '{' Statement '}'
 
 use crate::{
     ast::{
-        ArrayType, BinOp, ConstructorType, Declaration, Expression, Module, Parameter, Statement,
-        TupleType, Type,
+        ArrayTypeAst, BinOp, Constant, ConstructorTypeAst, Declaration, Expression, Function,
+        Module, Parameter, Statement, TupleTypeAst, TypeAst,
     },
     lexer::{LexError, LexResult, Token, TokenKind},
 };
@@ -123,11 +123,11 @@ where
             .ok_or(ParseError::ExpectedTypeIdentifier)?;
         self.expect_token(TokenKind::Equal)?;
         let value = self.parse_expression()?;
-        Ok(Declaration::Global {
+        Ok(Declaration::Constant(Constant {
             name: identifier,
             type_,
             value,
-        })
+        }))
     }
 
     fn parse_function(&mut self) -> Result<Declaration, ParseError> {
@@ -164,12 +164,12 @@ where
         self.expect_token(TokenKind::LeftBrace)?;
         let body = self.parse_block()?;
         self.expect_token(TokenKind::RightBrace)?;
-        Ok(Declaration::Function {
+        Ok(Declaration::Function(Function {
             name,
             parameters,
             body,
-            return_type: return_type.unwrap_or(Type::Unit),
-        })
+            return_type: return_type.unwrap_or(TypeAst::Unit),
+        }))
     }
 
     fn parse_function_parameter(&mut self) -> Result<Option<Parameter>, ParseError> {
@@ -190,13 +190,13 @@ where
         }
     }
 
-    fn parse_type(&mut self) -> Result<Option<Type>, ParseError> {
+    fn parse_type(&mut self) -> Result<Option<TypeAst>, ParseError> {
         match self.next_token() {
             Some(Token {
                 kind: TokenKind::Identifier { name },
                 ..
             }) => {
-                let mut type_ = Type::Constructor(ConstructorType { name });
+                let mut type_ = TypeAst::Constructor(ConstructorTypeAst { name });
                 while matches!(
                     self.tok0,
                     Some(Token {
@@ -208,17 +208,17 @@ where
                     let dimension = self.parse_expression()?;
                     self.expect_token(TokenKind::RightSquare)?;
                     match type_ {
-                        Type::Constructor(..) | Type::Tuple(..) => {
-                            type_ = Type::Array(ArrayType {
+                        TypeAst::Constructor(..) | TypeAst::Tuple(..) => {
+                            type_ = TypeAst::Array(ArrayTypeAst {
                                 type_: type_.into(),
                                 dimensions: vec![dimension],
                             })
                         }
-                        Type::Array(mut array) => {
+                        TypeAst::Array(mut array) => {
                             array.dimensions.push(dimension);
-                            type_ = Type::Array(array);
+                            type_ = TypeAst::Array(array);
                         }
-                        Type::Unit => return Err(ParseError::UnitArrayError),
+                        TypeAst::Unit => return Err(ParseError::UnitArrayError),
                     }
                 }
                 Ok(Some(type_))
@@ -242,9 +242,9 @@ where
                 }
                 self.expect_token(TokenKind::RightParen)?;
                 let type_ = if types.len() == 0 {
-                    Type::Unit
+                    TypeAst::Unit
                 } else {
-                    Type::Tuple(TupleType { types })
+                    TypeAst::Tuple(TupleTypeAst { types })
                 };
                 Ok(Some(type_))
             }
