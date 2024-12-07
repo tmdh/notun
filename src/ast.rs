@@ -1,3 +1,5 @@
+use crate::lexer::Token;
+
 #[derive(Debug)]
 pub struct Module {
     pub declarations: Vec<Declaration>,
@@ -14,7 +16,7 @@ pub struct Function {
     pub name: String,
     pub parameters: Vec<Parameter>,
     pub return_type: TypeAst,
-    pub body: Statement,
+    pub body: Vec<Statement>,
 }
 
 #[derive(Debug)]
@@ -32,21 +34,18 @@ pub enum Statement {
         value: Expression,
     },
     Assignment {
-        lhs: Expression,
+        lhs: String,
         rhs: Expression,
     },
     Expression(Expression),
-    Block {
-        statements: Vec<Self>,
-    },
     If {
         condition: Expression,
-        then_branch: Box<Self>,
-        else_branch: Option<Box<Self>>,
+        then_branch: Vec<Self>,
+        else_branch: Option<Vec<Self>>,
     },
     While {
         condition: Expression,
-        body: Box<Self>,
+        body: Vec<Self>,
     },
     Return {
         return_value: Expression,

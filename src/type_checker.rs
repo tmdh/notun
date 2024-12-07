@@ -171,89 +171,180 @@ impl TypeChecker {
                 type_: t,
             })
             .collect::<Vec<_>>();
-        env.enter_new_scope(|env| {
-            let body = self
-                .infer_function_body(&typed_parameters, &body, return_type.clone(), env)
-                .unwrap();
-            Some(TypedDeclaration::Function(TypedFunction {
-                name: name.clone(),
-                parameters: typed_parameters,
-                return_type: return_type.clone(),
-                body: TypedStatement::Block { statements: body },
-            }))
+        env.current_fn_name = name.clone();
+        env.current_fn_return_type = return_type.clone();
+        let body =
+            self.infer_function_body_scoped(&typed_parameters, &body, return_type.clone(), env);
+        env.current_fn_name = "".to_string();
+        env.current_fn_return_type = Rc::new(Type::Unit);
+        TypedDeclaration::Function(TypedFunction {
+            name: name.clone(),
+            parameters: typed_parameters,
+            return_type: return_type.clone(),
+            body,
         })
-        .unwrap()
     }
 
-    fn infer_function_body(
+    fn infer_function_body_scoped(
         &mut self,
         typed_paramters: &Vec<TypedParameter>,
-        body: &Statement,
+        body: &Vec<Statement>,
         _return_type: Rc<Type>,
         env: &mut Environment,
-    ) -> Option<Vec<TypedStatement>> {
-        match body {
-            Statement::Block { statements } => env.enter_new_scope(|env| {
-                let mut parameter_names: HashSet<&String> =
-                    HashSet::with_capacity(typed_paramters.len());
-                for parameter in typed_paramters {
-                    if !parameter_names.insert(&parameter.name) {
-                        self.errors.push(TypeError::ArgumentNameAlreadyUsed {
-                            name: parameter.name.clone(),
-                        });
-                    }
-                    env.insert_local_variable(parameter.name.clone(), parameter.type_.clone());
+    ) -> Vec<TypedStatement> {
+        env.enter_new_scope(|env| {
+            let mut parameter_names: HashSet<&String> =
+                HashSet::with_capacity(typed_paramters.len());
+            for parameter in typed_paramters {
+                if !parameter_names.insert(&parameter.name) {
+                    self.errors.push(TypeError::ArgumentNameAlreadyUsed {
+                        name: parameter.name.clone(),
+                    });
                 }
-                Some(self.infer_statements(statements, env))
-            }),
-            c => {
-                panic!("Exptected function block inside a function, found {:#?}", c);
+                env.insert_local_variable(parameter.name.clone(), parameter.type_.clone());
             }
-        }
+            self.infer_statements_scoped(body, env)
+        })
     }
 
-    fn infer_statements(
+    fn infer_statements_scoped(
         &mut self,
         statements: &Vec<Statement>,
         env: &mut Environment,
     ) -> Vec<TypedStatement> {
-        let mut typed_statements: Vec<TypedStatement> = vec![];
-        for statement in statements {
-            let typed_statement = match statement {
-                Statement::Let { name, type_, value } => env.enter_new_scope(|env| {
-                    let typed_value = self.infer_expression(value, env);
-                    let type_from_annotation = self.type_from_ast(type_);
-                    match (typed_value, type_from_annotation) {
-                        (Some(typed_value), Some(type_from_annotation)) => {
-                            if typed_value.type_() == type_from_annotation {
-                                return Some(TypedStatement::Let {
-                                    name: name.clone(),
-                                    type_: type_from_annotation,
-                                    value: typed_value,
-                                });
-                            } else {
-                                self.errors.push(TypeError::TypeMismatchAssign {
-                                    name: name.clone(),
-                                    expected: type_from_annotation.clone(),
-                                    found: typed_value.type_().clone(),
-                                });
-                                return Some(TypedStatement::Let {
-                                    name: name.clone(),
-                                    type_: type_from_annotation,
-                                    value: typed_value,
-                                });
-                            }
+        env.enter_new_scope(|env| {
+            let mut typed_statements: Vec<TypedStatement> = vec![];
+            for statement in statements {
+                let typed_statement = self.infer_statement(statement, env);
+                if let Some(typed_statement) = typed_statement {
+                    typed_statements.push(typed_statement);
+                }
+            }
+            typed_statements
+        })
+    }
+
+    fn infer_statement(
+        &mut self,
+        statement: &Statement,
+        env: &mut Environment,
+    ) -> Option<TypedStatement> {
+        match statement {
+            Statement::Let { name, type_, value } => {
+                let typed_value = self.infer_expression(value, env);
+                let type_from_annotation = self.type_from_ast(type_);
+                if let Some(type_) = &type_from_annotation {
+                    env.insert_local_variable(name.clone(), type_.clone());
+                }
+                match (typed_value, type_from_annotation) {
+                    (Some(typed_value), Some(type_from_annotation)) => {
+                        if typed_value.type_() == type_from_annotation {
+                            return Some(TypedStatement::Let {
+                                name: name.clone(),
+                                type_: type_from_annotation,
+                                value: typed_value,
+                            });
+                        } else {
+                            self.errors.push(TypeError::TypeMismatchAssign {
+                                name: name.clone(),
+                                expected: type_from_annotation.clone(),
+                                found: typed_value.type_().clone(),
+                            });
+                            return Some(TypedStatement::Let {
+                                name: name.clone(),
+                                type_: type_from_annotation,
+                                value: typed_value,
+                            });
                         }
-                        _ => None,
                     }
-                }),
-                _ => todo!(),
-            };
-            if let Some(typed_statement) = typed_statement {
-                typed_statements.push(typed_statement);
+                    _ => None,
+                }
+            }
+            Statement::Assignment { lhs, rhs } => {
+                let typed_value = self.infer_expression(rhs, env);
+                let type_from_lhs = env.get(lhs);
+                match (typed_value, type_from_lhs) {
+                    (Some(typed_value), Some(type_from_lhs)) => {
+                        if typed_value.type_() == type_from_lhs.type_ {
+                            return Some(TypedStatement::Assignment {
+                                lhs: lhs.clone(),
+                                type_: type_from_lhs.type_.clone(),
+                                rhs: typed_value,
+                            });
+                        } else {
+                            self.errors.push(TypeError::TypeMismatchAssign {
+                                name: lhs.clone(),
+                                expected: type_from_lhs.type_.clone(),
+                                found: typed_value.type_().clone(),
+                            });
+                            return Some(TypedStatement::Assignment {
+                                lhs: lhs.clone(),
+                                type_: type_from_lhs.type_.clone(),
+                                rhs: typed_value,
+                            });
+                        }
+                    }
+                    _ => None,
+                }
+            }
+            Statement::Expression(expression) => {
+                let typed_expression = self.infer_expression(expression, env)?;
+                return Some(TypedStatement::Expression(typed_expression));
+            }
+            Statement::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let typed_condition = self.infer_expression(condition, env)?;
+                match typed_condition.type_().as_ref() {
+                    Type::Bool => {}
+                    _ => {
+                        self.errors.push(TypeError::TypeMismatchIfCondition {
+                            found: typed_condition.type_().clone(),
+                        });
+                    }
+                };
+                let then_branch = self.infer_statements_scoped(then_branch, env);
+                let else_branch = else_branch
+                    .as_ref()
+                    .map(|s| self.infer_statements_scoped(s, env));
+                Some(TypedStatement::If {
+                    condition: typed_condition,
+                    then_branch,
+                    else_branch,
+                })
+            }
+            Statement::While { condition, body } => {
+                let typed_condition = self.infer_expression(condition, env)?;
+                match typed_condition.type_().as_ref() {
+                    Type::Bool => {}
+                    _ => {
+                        self.errors.push(TypeError::TypeMismatchWhileCondition {
+                            found: typed_condition.type_().clone(),
+                        });
+                    }
+                };
+                let body = self.infer_statements_scoped(body, env);
+                Some(TypedStatement::While {
+                    condition: typed_condition,
+                    body,
+                })
+            }
+            Statement::Return { return_value } => {
+                let typed_return_value = self.infer_expression(return_value, env)?;
+                if typed_return_value.type_() != env.current_fn_return_type {
+                    self.errors.push(TypeError::TypeMismatchReturnValue {
+                        name: env.current_fn_name.clone(),
+                        found: typed_return_value.type_(),
+                        expected: env.current_fn_return_type.clone(),
+                    });
+                }
+                Some(TypedStatement::Return {
+                    return_value: typed_return_value,
+                })
             }
         }
-        typed_statements
     }
 
     fn infer_expression(
@@ -442,13 +533,13 @@ enum RegistrationStatus {
     Failure,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ValueConstructor {
     pub variant: ValueConstructorVariant,
     pub type_: Rc<Type>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum ValueConstructorVariant {
     ModuleFunction { parameters: Vec<TypedParameter> },
     ModuleConstant,
@@ -518,6 +609,17 @@ pub enum TypeError {
         expected: Rc<Type>,
         found: Rc<Type>,
     },
+    TypeMismatchIfCondition {
+        found: Rc<Type>,
+    },
+    TypeMismatchWhileCondition {
+        found: Rc<Type>,
+    },
+    TypeMismatchReturnValue {
+        name: String,
+        expected: Rc<Type>,
+        found: Rc<Type>,
+    },
 }
 
 #[derive(Debug)]
@@ -535,7 +637,7 @@ pub struct TypedFunction {
     pub name: String,
     pub parameters: Vec<TypedParameter>,
     pub return_type: Rc<Type>,
-    pub body: TypedStatement,
+    pub body: Vec<TypedStatement>,
 }
 
 #[derive(Debug, Clone)]
@@ -552,21 +654,19 @@ pub enum TypedStatement {
         value: TypedExpression,
     },
     Assignment {
-        lhs: TypedExpression,
+        lhs: String,
+        type_: Rc<Type>,
         rhs: TypedExpression,
     },
     Expression(TypedExpression),
-    Block {
-        statements: Vec<Self>,
-    },
     If {
         condition: TypedExpression,
-        then_branch: Box<Self>,
-        else_branch: Option<Box<Self>>,
+        then_branch: Vec<Self>,
+        else_branch: Option<Vec<Self>>,
     },
     While {
         condition: TypedExpression,
-        body: Box<Self>,
+        body: Vec<Self>,
     },
     Return {
         return_value: TypedExpression,

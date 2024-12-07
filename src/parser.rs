@@ -162,7 +162,7 @@ where
             _ => {}
         }
         self.expect_token(TokenKind::LeftBrace)?;
-        let body = self.parse_block()?;
+        let body = self.parse_statements()?;
         self.expect_token(TokenKind::RightBrace)?;
         Ok(Declaration::Function(Function {
             name,
@@ -252,7 +252,7 @@ where
         }
     }
 
-    fn parse_block(&mut self) -> Result<Statement, ParseError> {
+    fn parse_statements(&mut self) -> Result<Vec<Statement>, ParseError> {
         let mut statements = vec![];
         while let Some(statement) = self.parse_statement()? {
             statements.push(statement);
@@ -264,7 +264,7 @@ where
                 _ => {}
             }
         }
-        Ok(Statement::Block { statements })
+        Ok(statements)
     }
 
     fn parse_statement(&mut self) -> Result<Option<Statement>, ParseError> {
@@ -297,24 +297,19 @@ where
                 self.next_token();
                 Ok(Some(self.parse_return_statement()?))
             }
+            Some(Token {
+                kind: TokenKind::Identifier { name },
+                ..
+            }) => {
+                let name = name.clone();
+                self.next_token();
+                Ok(Some(self.parse_assignment_statement(name)?))
+            }
             Some(c) => {
                 if !c.kind.is_expression_start() {
-                    panic!("Statement doesn't start as an expression, found: {:#?}", c);
+                    panic!("A statement shouldn't start with {:#?}", c);
                 }
-                let lhs = self.parse_expression()?;
-                match self.tok0 {
-                    Some(Token {
-                        kind: TokenKind::Equal,
-                        ..
-                    }) => {
-                        self.next_token();
-                        let rhs = self.parse_expression()?;
-                        return Ok(Some(Statement::Assignment { lhs, rhs }));
-                    }
-                    _ => {
-                        return Ok(Some(Statement::Expression(lhs)));
-                    }
-                }
+                Ok(Some(Statement::Expression(self.parse_expression()?)))
             }
             _ => todo!(),
         }
@@ -338,7 +333,7 @@ where
     fn parse_if_statement(&mut self) -> Result<Statement, ParseError> {
         let condition = self.parse_expression()?;
         self.expect_token(TokenKind::LeftBrace)?;
-        let then_branch = self.parse_block()?;
+        let then_branch = self.parse_statements()?;
         self.expect_token(TokenKind::RightBrace)?;
         let mut else_branch = None;
         if let Some(Token {
@@ -347,15 +342,13 @@ where
         }) = self.tok0
         {
             self.next_token();
-            if let Some(branch) = self.parse_statement()? {
-                else_branch = Some(Box::new(branch));
-            } else {
-                return Err(ParseError::ExpectedElseBlock);
-            }
+            self.expect_token(TokenKind::LeftBrace)?;
+            else_branch = Some(self.parse_statements()?);
+            self.expect_token(TokenKind::RightBrace)?;
         }
         Ok(Statement::If {
             condition,
-            then_branch: then_branch.into(),
+            then_branch,
             else_branch,
         })
     }
@@ -363,17 +356,20 @@ where
     fn parse_while_statement(&mut self) -> Result<Statement, ParseError> {
         let condition = self.parse_expression()?;
         self.expect_token(TokenKind::LeftBrace)?;
-        let body = self.parse_block()?;
+        let body = self.parse_statements()?;
         self.expect_token(TokenKind::RightBrace)?;
-        Ok(Statement::While {
-            condition,
-            body: body.into(),
-        })
+        Ok(Statement::While { condition, body })
     }
 
     fn parse_return_statement(&mut self) -> Result<Statement, ParseError> {
         let return_value = self.parse_expression()?;
         Ok(Statement::Return { return_value })
+    }
+
+    fn parse_assignment_statement(&mut self, name: String) -> Result<Statement, ParseError> {
+        self.expect_token(TokenKind::Equal)?;
+        let rhs = self.parse_expression()?;
+        Ok(Statement::Assignment { lhs: name, rhs })
     }
 
     fn parse_function_arguments(&mut self) -> Result<Vec<Expression>, ParseError> {
