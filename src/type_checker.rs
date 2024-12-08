@@ -552,11 +552,11 @@ pub enum Type {
         parameters: Vec<Rc<Type>>,
         return_type: Rc<Type>,
     },
-    Int64,
-    Float64,
     Tuple {
         types: Vec<Rc<Type>>,
     },
+    Int64,
+    Float64,
     Bool,
     Unit,
 }
@@ -641,7 +641,7 @@ pub struct TypedFunction {
 }
 
 #[derive(Debug, Clone)]
-struct TypedParameter {
+pub struct TypedParameter {
     pub name: String,
     pub type_: Rc<Type>,
 }
