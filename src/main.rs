@@ -3,6 +3,7 @@ use type_checker::TypeChecker;
 
 mod ast;
 mod environment;
+mod ir;
 mod lexer;
 mod parser;
 mod type_checker;
