@@ -624,11 +624,11 @@ pub enum TypeError {
 
 #[derive(Debug)]
 pub struct TypedModule {
-    declarations: Vec<TypedDeclaration>,
+    pub declarations: Vec<TypedDeclaration>,
 }
 
 #[derive(Debug)]
-enum TypedDeclaration {
+pub enum TypedDeclaration {
     Function(TypedFunction),
 }
 

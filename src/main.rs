@@ -1,5 +1,6 @@
 #![allow(unused)]
 use type_checker::TypeChecker;
+use ir::Translator;
 
 mod ast;
 mod environment;
@@ -45,7 +46,7 @@ fn main() {
             b = b + 1
             f = false
         }
-        return (5, true)
+        return (5, 5)
     }";
     let tokenizer = lexer::make_tokenizer(SOURCE);
     let mut parser = parser::Parser::new(tokenizer);
@@ -57,6 +58,17 @@ fn main() {
             println!("{:#?}", error);
         }
     } else {
-        println!("{:#?}", typed_module.unwrap());
+        let typed_module = typed_module.unwrap();
+        println!("Typed AST:");
+        println!("{:#?}", typed_module);
+        
+        // Translate to IR
+        let mut translator = Translator::new();
+        let ir = translator.translate_module(&typed_module);
+        
+        println!("\nIntermediate Representation:");
+        for stmt in ir {
+            println!("{:#?}", stmt);
+        }
     }
 }
