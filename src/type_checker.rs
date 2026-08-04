@@ -397,8 +397,17 @@ impl TypeChecker {
                         if left.type_() == right.type_() {
                             Some(TypedExpression::BinaryOperation {
                                 operator: *operator,
-                                type_: left.type_().clone(),
-
+                                type_: match *operator {
+                                    BinOp::EqualEqual
+                                    | BinOp::Greater
+                                    | BinOp::GreaterEqual
+                                    | BinOp::Less
+                                    | BinOp::LessEqual
+                                    | BinOp::LogicalAnd
+                                    | BinOp::LogicalOr
+                                    | BinOp::NotEqual => Rc::new(Type::Bool),
+                                    _ => left.type_(),
+                                },
                                 left: Box::new(left),
                                 right: Box::new(right),
                             })

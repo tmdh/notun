@@ -1,13 +1,16 @@
-use crate::type_checker::{
-    Type, TypedDeclaration, TypedExpression, TypedFunction, TypedModule, TypedStatement,
+use crate::{
+    ast::BinOp,
+    type_checker::{
+        Type, TypedDeclaration, TypedExpression, TypedFunction, TypedModule, TypedStatement,
+    },
 };
 use inkwell::{
-    OptimizationLevel,
+    FloatPredicate, IntPredicate, OptimizationLevel,
     builder::Builder,
     context::Context,
     execution_engine::ExecutionEngine,
     module::Module,
-    values::{BasicValue, IntValue},
+    values::{BasicValueEnum, FloatValue, FunctionValue, IntValue},
 };
 use std::process::Command;
 
@@ -94,8 +97,8 @@ impl<'ctx> Codegen<'ctx> {
         }
     }
 
-    pub fn compile_function(&self, function: &TypedFunction) -> inkwell::values::FunctionValue<'_> {
-        let type_ = match *function.return_type {
+    pub fn compile_function(&self, function: &TypedFunction) -> FunctionValue<'_> {
+        let type_ = match function.return_type.as_ref() {
             Type::Int64 => self.context.i64_type(),
             // Type::Float64 => self.context.f64_type(),
             // Type::Bool => self.context.bool_type(),
@@ -124,13 +127,149 @@ impl<'ctx> Codegen<'ctx> {
         }
     }
 
-    fn compile_expression(&self, expression: &TypedExpression) -> impl BasicValue<'_> {
+    fn compile_expression(&self, expression: &TypedExpression) -> BasicValueEnum<'ctx> {
         match expression {
             TypedExpression::Integer { value, type_ } => {
                 let negative = if *value < 0 { true } else { false };
-                self.context.i64_type().const_int(*value as u64, negative)
+                self.context
+                    .i64_type()
+                    .const_int(*value as u64, negative)
+                    .into()
+            }
+            TypedExpression::Float { value, type_ } => {
+                self.context.f64_type().const_float(*value).into()
+            }
+            TypedExpression::Bool { value, type_ } => self
+                .context
+                .bool_type()
+                .const_int(*value as u64, false)
+                .into(),
+            TypedExpression::BinaryOperation {
+                operator,
+                left,
+                right,
+                type_,
+            } => {
+                let left = self.compile_expression(left);
+                let right = self.compile_expression(right);
+                match (left, right) {
+                    (BasicValueEnum::IntValue(l), BasicValueEnum::IntValue(r)) => {
+                        self.compile_int_binary_operation(*operator, l, r) // handles integer and boolean values
+                    }
+                    (BasicValueEnum::FloatValue(l), BasicValueEnum::FloatValue(r)) => {
+                        self.compile_float_binary_operation(*operator, l, r)
+                    }
+                    _ => unreachable!(),
+                }
             }
             _ => unimplemented!(),
+        }
+    }
+
+    fn compile_int_binary_operation(
+        &self,
+        operator: BinOp,
+        left: IntValue<'ctx>,
+        right: IntValue<'ctx>,
+    ) -> BasicValueEnum<'ctx> {
+        match operator {
+            BinOp::Add => self.builder.build_int_add(left, right, "add"),
+            BinOp::Subtract => self.builder.build_int_sub(left, right, "sub"),
+            BinOp::Multiply => self.builder.build_int_mul(left, right, "mul"),
+            BinOp::Divide => self.builder.build_int_signed_div(left, right, "div"),
+            BinOp::Modulo => self.builder.build_int_signed_rem(left, right, "rem"),
+            BinOp::LogicalOr => self.builder.build_or(left, right, "logical"),
+            BinOp::LogicalAnd => self.builder.build_and(left, right, "logical"),
+            BinOp::Less => self
+                .builder
+                .build_int_compare(IntPredicate::SLT, left, right, "cmp"),
+            BinOp::Greater => self
+                .builder
+                .build_int_compare(IntPredicate::SGT, left, right, "cmp"),
+            BinOp::LessEqual => {
+                self.builder
+                    .build_int_compare(IntPredicate::SLE, left, right, "cmp")
+            }
+            BinOp::GreaterEqual => {
+                self.builder
+                    .build_int_compare(IntPredicate::SGE, left, right, "cmp")
+            }
+            BinOp::EqualEqual => {
+                self.builder
+                    .build_int_compare(IntPredicate::EQ, left, right, "cmp")
+            }
+            BinOp::NotEqual => self
+                .builder
+                .build_int_compare(IntPredicate::NE, left, right, "cmp"),
+            _ => unreachable!(),
+        }
+        .unwrap()
+        .into()
+    }
+
+    fn compile_float_binary_operation(
+        &self,
+        operator: BinOp,
+        left: FloatValue<'ctx>,
+        right: FloatValue<'ctx>,
+    ) -> BasicValueEnum<'ctx> {
+        match operator {
+            BinOp::Add => self
+                .builder
+                .build_float_add(left, right, "add")
+                .unwrap()
+                .into(),
+            BinOp::Subtract => self
+                .builder
+                .build_float_sub(left, right, "sub")
+                .unwrap()
+                .into(),
+            BinOp::Multiply => self
+                .builder
+                .build_float_mul(left, right, "mul")
+                .unwrap()
+                .into(),
+            BinOp::Divide => self
+                .builder
+                .build_float_div(left, right, "div")
+                .unwrap()
+                .into(),
+            BinOp::Modulo => self
+                .builder
+                .build_float_rem(left, right, "rem")
+                .unwrap()
+                .into(),
+            BinOp::Less => self
+                .builder
+                .build_float_compare(FloatPredicate::OLT, left, right, "cmp")
+                .unwrap()
+                .into(),
+            BinOp::Greater => self
+                .builder
+                .build_float_compare(FloatPredicate::OGT, left, right, "cmp")
+                .unwrap()
+                .into(),
+            BinOp::LessEqual => self
+                .builder
+                .build_float_compare(FloatPredicate::OLE, left, right, "cmp")
+                .unwrap()
+                .into(),
+            BinOp::GreaterEqual => self
+                .builder
+                .build_float_compare(FloatPredicate::OGE, left, right, "cmp")
+                .unwrap()
+                .into(),
+            BinOp::EqualEqual => self
+                .builder
+                .build_float_compare(FloatPredicate::OEQ, left, right, "cmp")
+                .unwrap()
+                .into(),
+            BinOp::NotEqual => self
+                .builder
+                .build_float_compare(FloatPredicate::ONE, left, right, "cmp")
+                .unwrap()
+                .into(),
+            _ => unreachable!(),
         }
     }
 }
