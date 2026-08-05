@@ -8,7 +8,7 @@ mod parser;
 mod type_checker;
 
 use inkwell::context::Context;
-use std::{env, process::Command};
+use std::{collections::HashMap, env, process::Command};
 use type_checker::TypeChecker;
 
 use crate::codegen::Codegen;
@@ -32,10 +32,11 @@ fn main() {
         println!("{:#?}", typed_module);
 
         let context = Context::create();
-        let codegen = Codegen {
+        let mut codegen = Codegen {
             context: &context,
             module: context.create_module("main_module"),
             builder: context.create_builder(),
+            environment: HashMap::new()
         };
 
         codegen.compile_module(&typed_module);

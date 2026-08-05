@@ -5,23 +5,19 @@ use crate::{
     },
 };
 use inkwell::{
-    FloatPredicate, IntPredicate, OptimizationLevel,
-    builder::Builder,
-    context::Context,
-    execution_engine::ExecutionEngine,
-    module::Module,
-    values::{BasicValueEnum, FloatValue, FunctionValue, IntValue},
+    FloatPredicate, IntPredicate, OptimizationLevel, builder::Builder, context::Context, execution_engine::ExecutionEngine, module::Module, types::{BasicType, BasicTypeEnum}, values::{BasicValueEnum, FloatValue, FunctionValue, IntValue, PointerValue},
 };
-use std::process::Command;
+use std::{collections::HashMap, process::Command};
 
 pub struct Codegen<'ctx> {
     pub context: &'ctx Context,
     pub module: Module<'ctx>,
     pub builder: Builder<'ctx>,
+    pub environment: HashMap<String, PointerValue<'ctx>>
 }
 
 impl<'ctx> Codegen<'ctx> {
-    pub fn compile_module(&self, typed_module: &TypedModule) {
+    pub fn compile_module(&mut self, typed_module: &TypedModule) {
         for declaration in &typed_module.declarations {
             match declaration {
                 TypedDeclaration::Function(function) => {
@@ -97,15 +93,18 @@ impl<'ctx> Codegen<'ctx> {
         }
     }
 
-    pub fn compile_function(&self, function: &TypedFunction) -> FunctionValue<'_> {
-        let type_ = match function.return_type.as_ref() {
-            Type::Int64 => self.context.i64_type(),
-            // Type::Float64 => self.context.f64_type(),
-            // Type::Bool => self.context.bool_type(),
+    pub fn llvm_basic_type(&self, type_: &Type) -> BasicTypeEnum<'ctx> {
+        match type_ {
+            Type::Int64 => self.context.i64_type().into(),
+            Type::Float64 => self.context.f64_type().into(),
+            Type::Bool => self.context.bool_type().into(),
             _ => unimplemented!(),
-        };
+        }
+    }
 
-        let fn_type = type_.fn_type(&[], false);
+    pub fn compile_function(&mut self, function: &TypedFunction) -> FunctionValue<'ctx> {
+        self.environment.clear();
+        let fn_type = self.llvm_basic_type(&function.return_type).fn_type(&[], false);
         let fn_val = self.module.add_function(&function.name, fn_type, None);
         let basic_block = self.context.append_basic_block(fn_val, "entry");
         self.builder.position_at_end(basic_block);
@@ -117,17 +116,30 @@ impl<'ctx> Codegen<'ctx> {
         fn_val
     }
 
-    fn compile_statement(&self, statement: &TypedStatement) {
+    fn compile_statement(&mut self, statement: &TypedStatement) {
         match statement {
             TypedStatement::Return { return_value } => {
+                let return_value = &self.compile_expression(return_value);
                 self.builder
-                    .build_return(Some(&self.compile_expression(return_value)));
+                    .build_return(Some(return_value));
+            }
+            TypedStatement::Let { name, type_, value } => {
+                let let_value = self.compile_expression(value);
+                let let_type = self.llvm_basic_type(type_);
+                let let_ptr = self.builder.build_alloca(let_type, name).unwrap();
+                self.builder.build_store(let_ptr, let_value).unwrap();
+                self.environment.insert(name.clone(), let_ptr);
+            }
+            TypedStatement::Assignment { lhs, type_, rhs } => {
+                let rhs_value = self.compile_expression(rhs);
+                let ptr = *self.environment.get(lhs).unwrap();
+                self.builder.build_store(ptr, rhs_value);
             }
             _ => unimplemented!(),
         }
     }
 
-    fn compile_expression(&self, expression: &TypedExpression) -> BasicValueEnum<'ctx> {
+    fn compile_expression(&mut self, expression: &TypedExpression) -> BasicValueEnum<'ctx> {
         match expression {
             TypedExpression::Integer { value, type_ } => {
                 let negative = if *value < 0 { true } else { false };
@@ -162,7 +174,12 @@ impl<'ctx> Codegen<'ctx> {
                     _ => unreachable!(),
                 }
             }
-            _ => unimplemented!(),
+            TypedExpression::Var { name, type_ } => {
+                let let_type = self.llvm_basic_type(type_);
+                let ptr = *self.environment.get(name).unwrap();
+                self.builder.build_load(let_type, ptr, name).unwrap()
+            }
+            _ => unimplemented!()
         }
     }
 

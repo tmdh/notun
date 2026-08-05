@@ -1,6 +1,5 @@
 fn main() -> Int64 {
-    if true == true {
-        return 42
-    }
-    return 0
+    let a: Int64 = 1
+    a = 5
+    return a
 }

@@ -2,6 +2,15 @@
 name = "notun"
 version = "0.1.0"
 edition = "2024"
+autotests = false
 
 [dependencies]
 inkwell = { version = "0.9.0", features = ["llvm22-1"] }
+
+[[test]]
+name = "binary_operations"
+path = "tests/binary_operations.rs"
+
+[[test]]
+name = "assignment"
+path = "tests/assignment.rs"
