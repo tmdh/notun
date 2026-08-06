@@ -33,7 +33,9 @@ pub fn compile_and_run(source: &str) -> i32 {
     let status = Command::new(&exe)
         .status()
         .expect("failed to run the compiled program");
-    let code = status.code().expect("compiled program terminated by a signal");
+    let code = status
+        .code()
+        .expect("compiled program terminated by a signal");
 
     let _ = std::fs::remove_dir_all(&dir);
     code

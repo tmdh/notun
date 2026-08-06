@@ -36,7 +36,7 @@ fn main() {
             context: &context,
             module: context.create_module("main_module"),
             builder: context.create_builder(),
-            environment: HashMap::new()
+            env: HashMap::new(),
         };
 
         codegen.compile_module(&typed_module);

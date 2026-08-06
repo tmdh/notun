@@ -5,7 +5,13 @@ use crate::{
     },
 };
 use inkwell::{
-    FloatPredicate, IntPredicate, OptimizationLevel, builder::Builder, context::Context, execution_engine::ExecutionEngine, module::Module, types::{BasicType, BasicTypeEnum}, values::{BasicValueEnum, FloatValue, FunctionValue, IntValue, PointerValue},
+    FloatPredicate, IntPredicate, OptimizationLevel,
+    builder::Builder,
+    context::Context,
+    execution_engine::ExecutionEngine,
+    module::Module,
+    types::{BasicType, BasicTypeEnum},
+    values::{BasicValueEnum, FloatValue, FunctionValue, IntValue, PointerValue},
 };
 use std::{collections::HashMap, process::Command};
 
@@ -13,7 +19,7 @@ pub struct Codegen<'ctx> {
     pub context: &'ctx Context,
     pub module: Module<'ctx>,
     pub builder: Builder<'ctx>,
-    pub environment: HashMap<String, PointerValue<'ctx>>
+    pub env: HashMap<String, PointerValue<'ctx>>,
 }
 
 impl<'ctx> Codegen<'ctx> {
@@ -26,13 +32,13 @@ impl<'ctx> Codegen<'ctx> {
             }
         }
 
+        println!("Generated LLVM IR:");
+        println!("{}", self.module.print_to_string().to_string());
+
         if let Err(e) = self.module.verify() {
             eprintln!("Module verification failed: {}", e.to_string());
             return;
         }
-
-        println!("Generated LLVM IR:");
-        println!("{}", self.module.print_to_string().to_string());
 
         let target_triple = inkwell::targets::TargetMachine::get_default_triple();
         inkwell::targets::Target::initialize_native(
@@ -103,37 +109,79 @@ impl<'ctx> Codegen<'ctx> {
     }
 
     pub fn compile_function(&mut self, function: &TypedFunction) -> FunctionValue<'ctx> {
-        self.environment.clear();
-        let fn_type = self.llvm_basic_type(&function.return_type).fn_type(&[], false);
-        let fn_val = self.module.add_function(&function.name, fn_type, None);
-        let basic_block = self.context.append_basic_block(fn_val, "entry");
+        let fn_type = self
+            .llvm_basic_type(&function.return_type)
+            .fn_type(&[], false);
+        let fn_value = self.module.add_function(&function.name, fn_type, None);
+        let basic_block = self.context.append_basic_block(fn_value, "entry");
         self.builder.position_at_end(basic_block);
-
-        for statement in &function.body {
-            self.compile_statement(statement);
+        self.compile_statements(&function.body, fn_value);
+        if !self.is_current_block_terminated() {
+            self.builder.build_unreachable();
         }
-
-        fn_val
+        fn_value
     }
 
-    fn compile_statement(&mut self, statement: &TypedStatement) {
+    pub fn compile_statements(
+        &mut self,
+        statements: &Vec<TypedStatement>,
+        fn_value: FunctionValue<'_>,
+    ) {
+        let old_env = self.env.clone();
+        for statement in statements {
+            self.compile_statement(statement, fn_value);
+        }
+        self.env = old_env;
+    }
+
+    fn is_current_block_terminated(&self) -> bool {
+        self.builder.get_insert_block().and_then(|block| block.get_terminator()).is_some()
+    }
+
+    fn compile_statement(&mut self, statement: &TypedStatement, fn_value: FunctionValue<'_>) {
         match statement {
             TypedStatement::Return { return_value } => {
                 let return_value = &self.compile_expression(return_value);
-                self.builder
-                    .build_return(Some(return_value));
+                self.builder.build_return(Some(return_value));
             }
             TypedStatement::Let { name, type_, value } => {
                 let let_value = self.compile_expression(value);
                 let let_type = self.llvm_basic_type(type_);
                 let let_ptr = self.builder.build_alloca(let_type, name).unwrap();
                 self.builder.build_store(let_ptr, let_value).unwrap();
-                self.environment.insert(name.clone(), let_ptr);
+                self.env.insert(name.clone(), let_ptr);
             }
             TypedStatement::Assignment { lhs, type_, rhs } => {
                 let rhs_value = self.compile_expression(rhs);
-                let ptr = *self.environment.get(lhs).unwrap();
+                let ptr = *self.env.get(lhs).unwrap();
                 self.builder.build_store(ptr, rhs_value);
+            }
+            TypedStatement::If {
+                condition,
+                then_branch,
+                else_branch,
+            } => {
+                let condition = self.compile_expression(condition).into_int_value();
+                let then_block = self.context.append_basic_block(fn_value, "then");
+                let else_block = self.context.append_basic_block(fn_value, "else");
+                let merge_block = self.context.append_basic_block(fn_value, "merge");
+                self.builder
+                    .build_conditional_branch(condition, then_block, else_block);
+
+                self.builder.position_at_end(then_block);
+                self.compile_statements(then_branch, fn_value);
+                if (!self.is_current_block_terminated()) {
+                    self.builder.build_unconditional_branch(merge_block);
+                }
+
+                self.builder.position_at_end(else_block);
+                if let Some(else_branch) = else_branch {
+                    self.compile_statements(else_branch, fn_value);
+                }
+                if (!self.is_current_block_terminated()) {
+                    self.builder.build_unconditional_branch(merge_block);
+                }
+                self.builder.position_at_end(merge_block);
             }
             _ => unimplemented!(),
         }
@@ -176,10 +224,10 @@ impl<'ctx> Codegen<'ctx> {
             }
             TypedExpression::Var { name, type_ } => {
                 let let_type = self.llvm_basic_type(type_);
-                let ptr = *self.environment.get(name).unwrap();
+                let ptr = *self.env.get(name).unwrap();
                 self.builder.build_load(let_type, ptr, name).unwrap()
             }
-            _ => unimplemented!()
+            _ => unimplemented!(),
         }
     }
 
