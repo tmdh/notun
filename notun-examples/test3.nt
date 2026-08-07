@@ -1,0 +1,7 @@
+fn main() -> Int64 {
+    let a: Int64 = 99
+    while a < 150 {
+        return a
+    }
+    return a
+}

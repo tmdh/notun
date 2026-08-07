@@ -125,7 +125,7 @@ impl<'ctx> Codegen<'ctx> {
     pub fn compile_statements(
         &mut self,
         statements: &Vec<TypedStatement>,
-        fn_value: FunctionValue<'_>,
+        fn_value: FunctionValue<'ctx>,
     ) {
         let old_env = self.env.clone();
         for statement in statements {
@@ -138,7 +138,7 @@ impl<'ctx> Codegen<'ctx> {
         self.builder.get_insert_block().and_then(|block| block.get_terminator()).is_some()
     }
 
-    fn compile_statement(&mut self, statement: &TypedStatement, fn_value: FunctionValue<'_>) {
+    fn compile_statement(&mut self, statement: &TypedStatement, fn_value: FunctionValue<'ctx>) {
         match statement {
             TypedStatement::Return { return_value } => {
                 let return_value = &self.compile_expression(return_value);
@@ -182,6 +182,24 @@ impl<'ctx> Codegen<'ctx> {
                     self.builder.build_unconditional_branch(merge_block);
                 }
                 self.builder.position_at_end(merge_block);
+            }
+            TypedStatement::While { condition, body } => {
+                let condition_block = self.context.append_basic_block(fn_value, "condition");
+                let body_block = self.context.append_basic_block(fn_value, "body");
+                let end_block = self.context.append_basic_block(fn_value, "end");
+                self.builder.build_unconditional_branch(condition_block);
+
+                self.builder.position_at_end(condition_block);
+                let condition = self.compile_expression(condition).into_int_value();
+                self.builder.build_conditional_branch(condition, body_block, end_block);
+
+                self.builder.position_at_end(body_block);
+                self.compile_statements(body, fn_value);
+                if (!self.is_current_block_terminated()) {
+                    self.builder.build_unconditional_branch(condition_block);
+                }
+
+                self.builder.position_at_end(end_block);   
             }
             _ => unimplemented!(),
         }

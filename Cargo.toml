@@ -14,3 +14,7 @@ path = "tests/binary_operations.rs"
 [[test]]
 name = "assignment"
 path = "tests/assignment.rs"
+
+[[test]]
+name = "conditional"
+path = "tests/conditional.rs"
