@@ -1,0 +1,8 @@
+fn main() -> Int64 {
+    hello(9)
+    return hello(5) + 5
+}
+
+fn hello(a: Int64) -> Int64 {
+    return 5 * a
+}

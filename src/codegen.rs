@@ -1,7 +1,8 @@
 use crate::{
     ast::BinOp,
     type_checker::{
-        Type, TypedDeclaration, TypedExpression, TypedFunction, TypedModule, TypedStatement,
+        Type, TypedDeclaration, TypedExpression, TypedFunction, TypedModule, TypedParameter,
+        TypedStatement,
     },
 };
 use inkwell::{
@@ -10,20 +11,39 @@ use inkwell::{
     context::Context,
     execution_engine::ExecutionEngine,
     module::Module,
+    targets::{CodeModel, FileType, RelocMode, Target, TargetMachine},
     types::{BasicType, BasicTypeEnum},
     values::{BasicValueEnum, FloatValue, FunctionValue, IntValue, PointerValue},
 };
-use std::{collections::HashMap, process::Command};
+use std::{collections::HashMap, fs, process::Command};
 
 pub struct Codegen<'ctx> {
     pub context: &'ctx Context,
     pub module: Module<'ctx>,
     pub builder: Builder<'ctx>,
     pub env: HashMap<String, PointerValue<'ctx>>,
+    pub functions: HashMap<String, FunctionValue<'ctx>>,
 }
 
 impl<'ctx> Codegen<'ctx> {
     pub fn compile_module(&mut self, typed_module: &TypedModule) {
+        for declaraion in &typed_module.declarations {
+            match declaraion {
+                TypedDeclaration::Function(function) => {
+                    let param_types: Vec<_> = function
+                        .parameters
+                        .iter()
+                        .map(|parameter| self.llvm_basic_type(&parameter.type_).into())
+                        .collect();
+                    let fn_type = self
+                        .llvm_basic_type(&function.return_type)
+                        .fn_type(&param_types, false);
+                    let fn_value = self.module.add_function(&function.name, fn_type, None);
+                    self.functions.insert(function.name.clone(), fn_value);
+                }
+            }
+        }
+
         for declaration in &typed_module.declarations {
             match declaration {
                 TypedDeclaration::Function(function) => {
@@ -40,14 +60,12 @@ impl<'ctx> Codegen<'ctx> {
             return;
         }
 
-        let target_triple = inkwell::targets::TargetMachine::get_default_triple();
-        inkwell::targets::Target::initialize_native(
-            &inkwell::targets::InitializationConfig::default(),
-        )
-        .expect("Failed to initialize native target");
+        let target_triple = TargetMachine::get_default_triple();
+        Target::initialize_native(&inkwell::targets::InitializationConfig::default())
+            .expect("Failed to initialize native target");
 
-        let target = inkwell::targets::Target::from_triple(&target_triple)
-            .expect("Failed to create target from triple");
+        let target =
+            Target::from_triple(&target_triple).expect("Failed to create target from triple");
 
         let target_machine = target
             .create_target_machine(
@@ -55,19 +73,19 @@ impl<'ctx> Codegen<'ctx> {
                 "generic",
                 "",
                 OptimizationLevel::Default,
-                inkwell::targets::RelocMode::Default,
-                inkwell::targets::CodeModel::Default,
+                RelocMode::Default,
+                CodeModel::Default,
             )
             .expect("Failed to create target machine");
 
-        if !std::fs::exists("notun-cache").unwrap() {
-            std::fs::create_dir("notun-cache");
+        if !fs::exists("notun-cache").unwrap() {
+            fs::create_dir("notun-cache");
         }
 
         target_machine
             .write_to_file(
                 &self.module,
-                inkwell::targets::FileType::Object,
+                FileType::Object,
                 "notun-cache/program.o".as_ref(),
             )
             .expect("Failed to write object file");
@@ -109,13 +127,22 @@ impl<'ctx> Codegen<'ctx> {
     }
 
     pub fn compile_function(&mut self, function: &TypedFunction) -> FunctionValue<'ctx> {
-        let fn_type = self
-            .llvm_basic_type(&function.return_type)
-            .fn_type(&[], false);
-        let fn_value = self.module.add_function(&function.name, fn_type, None);
+        let fn_value = *self.functions.get(&function.name).unwrap();
         let basic_block = self.context.append_basic_block(fn_value, "entry");
         self.builder.position_at_end(basic_block);
+        let old_env = self.env.clone();
+        for (index, parameter) in function.parameters.iter().enumerate() {
+            let param_value = fn_value.get_nth_param(index as u32).unwrap();
+            let param_type = self.llvm_basic_type(&parameter.type_);
+            let param_ptr = self
+                .builder
+                .build_alloca(param_type, &parameter.name)
+                .unwrap();
+            self.builder.build_store(param_ptr, param_value);
+            self.env.insert(parameter.name.clone(), param_ptr);
+        }
         self.compile_statements(&function.body, fn_value);
+        self.env = old_env;
         if !self.is_current_block_terminated() {
             self.builder.build_unreachable();
         }
@@ -127,15 +154,16 @@ impl<'ctx> Codegen<'ctx> {
         statements: &Vec<TypedStatement>,
         fn_value: FunctionValue<'ctx>,
     ) {
-        let old_env = self.env.clone();
         for statement in statements {
             self.compile_statement(statement, fn_value);
         }
-        self.env = old_env;
     }
 
     fn is_current_block_terminated(&self) -> bool {
-        self.builder.get_insert_block().and_then(|block| block.get_terminator()).is_some()
+        self.builder
+            .get_insert_block()
+            .and_then(|block| block.get_terminator())
+            .is_some()
     }
 
     fn compile_statement(&mut self, statement: &TypedStatement, fn_value: FunctionValue<'ctx>) {
@@ -191,7 +219,8 @@ impl<'ctx> Codegen<'ctx> {
 
                 self.builder.position_at_end(condition_block);
                 let condition = self.compile_expression(condition).into_int_value();
-                self.builder.build_conditional_branch(condition, body_block, end_block);
+                self.builder
+                    .build_conditional_branch(condition, body_block, end_block);
 
                 self.builder.position_at_end(body_block);
                 self.compile_statements(body, fn_value);
@@ -199,7 +228,10 @@ impl<'ctx> Codegen<'ctx> {
                     self.builder.build_unconditional_branch(condition_block);
                 }
 
-                self.builder.position_at_end(end_block);   
+                self.builder.position_at_end(end_block);
+            }
+            TypedStatement::Expression(e) => {
+                self.compile_expression(e);
             }
             _ => unimplemented!(),
         }
@@ -245,7 +277,26 @@ impl<'ctx> Codegen<'ctx> {
                 let ptr = *self.env.get(name).unwrap();
                 self.builder.build_load(let_type, ptr, name).unwrap()
             }
-            _ => unimplemented!(),
+            TypedExpression::Call {
+                name,
+                arguments,
+                type_,
+            } => {
+                let arguments: Vec<_> = arguments
+                    .iter()
+                    .map(|argument| self.compile_expression(argument).into())
+                    .collect();
+                self.builder
+                    .build_direct_call(
+                        *self.functions.get(name).unwrap(),
+                        arguments.as_slice(),
+                        "call",
+                    )
+                    .unwrap()
+                    .try_as_basic_value()
+                    .unwrap_basic()
+            }
+            c => unimplemented!("Codegen for {:?} is unimplemented", c),
         }
     }
 

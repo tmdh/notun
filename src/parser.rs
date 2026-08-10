@@ -303,7 +303,21 @@ where
             }) => {
                 let name = name.clone();
                 self.next_token();
-                Ok(Some(self.parse_assignment_statement(name)?))
+                if let Some(Token {
+                    kind: TokenKind::LeftParen,
+                    ..
+                }) = &self.tok0
+                {
+                    self.next_token();
+                    let arguments = self.parse_function_arguments()?;
+                    self.expect_token(TokenKind::RightParen)?;
+                    Ok(Some(Statement::Expression(Expression::Call {
+                        name,
+                        arguments,
+                    })))
+                } else {
+                    Ok(Some(self.parse_assignment_statement(name)?))
+                }
             }
             Some(c) => {
                 if !c.kind.is_expression_start() {
@@ -311,7 +325,7 @@ where
                 }
                 Ok(Some(Statement::Expression(self.parse_expression()?)))
             }
-            _ => todo!(),
+            _ => unreachable!(),
         }
     }
 
@@ -375,16 +389,22 @@ where
     fn parse_function_arguments(&mut self) -> Result<Vec<Expression>, ParseError> {
         let mut arguments = vec![];
         loop {
-            let argument = self.parse_expression()?;
-            arguments.push(argument);
-            match self.tok0 {
-                Some(Token {
-                    kind: TokenKind::Comma,
-                    ..
-                }) => {
-                    self.next_token();
+            if let Some(c) = &self.tok0
+                && c.kind.is_expression_start()
+            {
+                let argument = self.parse_expression()?;
+                arguments.push(argument);
+                match self.tok0 {
+                    Some(Token {
+                        kind: TokenKind::Comma,
+                        ..
+                    }) => {
+                        self.next_token();
+                    }
+                    _ => break,
                 }
-                _ => break,
+            } else {
+                break;
             }
         }
         Ok(arguments)
