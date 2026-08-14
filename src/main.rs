@@ -8,10 +8,10 @@ mod parser;
 mod type_checker;
 
 use inkwell::context::Context;
-use std::{collections::HashMap, env, process::Command};
+use std::{env, process::Command};
 use type_checker::TypeChecker;
 
-use crate::codegen::Codegen;
+use crate::{codegen::Codegen, lexer::TokenKind::Comma};
 
 fn main() {
     let command = env::args().nth(1).unwrap();
@@ -27,20 +27,55 @@ fn main() {
             println!("{:#?}", error);
         }
     } else {
-        let typed_module = typed_module.unwrap();
-        println!("Typed AST:");
+        let mut typed_module = typed_module.unwrap();
         println!("{:#?}", typed_module);
 
+        typed_module.add_entry_point();
+
         let context = Context::create();
-        let mut codegen = Codegen {
-            context: &context,
-            module: context.create_module("main_module"),
-            builder: context.create_builder(),
-            env: HashMap::new(),
-            functions: HashMap::new(),
-        };
+        let mut codegen = Codegen::new(&context);
 
         codegen.compile_module(&typed_module);
+
+        let compile_runtime_result = Command::new("clang")
+            .args(&["-c", "runtime.c", "-o", "notun-cache/runtime.o"])
+            .output();
+
+        match compile_runtime_result {
+            Ok(output) => {
+                if !output.status.success() {
+                    eprintln!("Compiling runtime failed:");
+                    eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to run clang: {}", e);
+                eprintln!("Make sure clang and lld are installed");
+            }
+        }
+
+        let link_result = Command::new("clang")
+            .args(&[
+                "notun-cache/program.o",
+                "notun-cache/runtime.o",
+                "-o",
+                "notun-cache/program",
+                "-fuse-ld=lld",
+            ])
+            .output();
+
+        match link_result {
+            Ok(output) => {
+                if !output.status.success() {
+                    eprintln!("Linking failed:");
+                    eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to run clang: {}", e);
+                eprintln!("Make sure clang and lld are installed");
+            }
+        }
 
         if command == "run" {
             println!("Running program...");

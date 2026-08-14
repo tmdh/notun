@@ -1,5 +1,3 @@
-use crate::lexer::Token;
-
 #[derive(Debug)]
 pub struct Module {
     pub declarations: Vec<Declaration>,

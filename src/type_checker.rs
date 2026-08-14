@@ -28,6 +28,21 @@ impl TypeChecker {
             }
         }
 
+        let print_parameter_type = Rc::new(Type::Int64);
+        env.insert(
+            "print".to_string(),
+            ValueConstructorVariant::ModuleFunction {
+                parameters: vec![TypedParameter {
+                    name: "print".to_string(),
+                    type_: print_parameter_type.clone(),
+                }],
+            },
+            Rc::new(Type::Fn {
+                parameters: vec![print_parameter_type.clone()],
+                return_type: Rc::new(Type::Unit),
+            }),
+        );
+
         for function in &functions {
             match self.register_function(function.clone(), &mut env) {
                 RegistrationStatus::Failure => {
@@ -634,6 +649,48 @@ pub enum TypeError {
 #[derive(Debug)]
 pub struct TypedModule {
     pub declarations: Vec<TypedDeclaration>,
+}
+
+impl TypedModule {
+   pub fn add_entry_point(&mut self) {
+        let main_fn = self
+            .declarations
+            .iter_mut()
+            .find_map(|declaration| match declaration {
+                TypedDeclaration::Function(function) if function.name == "main" => Some(function),
+                _ => None,
+            });
+        if let Some(function) = main_fn {
+            match function.return_type.as_ref() {
+                Type::Unit => {
+function.name = "__notun_main".to_string();
+                }
+                _ => {
+                    panic!("The main function only supports unit return type")
+                }
+            }
+            
+        }
+        self.declarations
+            .push(TypedDeclaration::Function(TypedFunction {
+                name: "main".to_string(),
+                parameters: vec![],
+                return_type: Rc::new(Type::Int64),
+                body: vec![
+                    TypedStatement::Expression(TypedExpression::Call {
+                        name: "__notun_main".to_string(),
+                        arguments: vec![],
+                        type_: Rc::new(Type::Unit),
+                    }),
+                    TypedStatement::Return {
+                        return_value: TypedExpression::Integer {
+                            value: 0,
+                            type_: Rc::new(Type::Int64),
+                        },
+                    },
+                ],
+            }));
+    }
 }
 
 #[derive(Debug)]

@@ -7,13 +7,13 @@ fn let_binding_is_read_back() {
     assert_eq!(
         compile_and_run(
             r#"
-fn main() -> Int64 {
+fn main() {
     let a: Int64 = 1
-    return a
+    print(a)
 }
 "#
         ),
-        1
+        "1\n"
     );
 }
 
@@ -22,13 +22,13 @@ fn assignment_overwrites_let_binding() {
     assert_eq!(
         compile_and_run(
             r#"
-fn main() -> Int64 {
+fn main() {
     let a: Int64 = 1
     a = 5
-    return a
+    print(a)
 }
 "#
         ),
-        5
+        "5\n"
     );
 }

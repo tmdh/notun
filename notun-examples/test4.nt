@@ -1,6 +1,6 @@
-fn main() -> Int64 {
+fn main() {
     hello(9)
-    return hello(5) + 5
+    print(hello(5) + 5)
 }
 
 fn hello(a: Int64) -> Int64 {

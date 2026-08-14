@@ -1,17 +1,15 @@
 use crate::{
     ast::BinOp,
     type_checker::{
-        Type, TypedDeclaration, TypedExpression, TypedFunction, TypedModule, TypedParameter,
-        TypedStatement,
+        Type, TypedDeclaration, TypedExpression, TypedFunction, TypedModule, TypedStatement,
     },
 };
 use inkwell::{
     FloatPredicate, IntPredicate, OptimizationLevel,
     builder::Builder,
     context::Context,
-    execution_engine::ExecutionEngine,
-    module::Module,
-    targets::{CodeModel, FileType, RelocMode, Target, TargetMachine},
+    module::{Linkage, Module},
+    targets::{CodeModel, FileType, InitializationConfig, RelocMode, Target, TargetMachine},
     types::{BasicType, BasicTypeEnum},
     values::{BasicValueEnum, FloatValue, FunctionValue, IntValue, PointerValue},
 };
@@ -26,7 +24,26 @@ pub struct Codegen<'ctx> {
 }
 
 impl<'ctx> Codegen<'ctx> {
+    pub fn new(context: &'ctx Context) -> Codegen<'ctx> {
+        Codegen {
+            context,
+            module: context.create_module("main_module"),
+            builder: context.create_builder(),
+            env: HashMap::new(),
+            functions: HashMap::new(),
+        }
+    }
+
     pub fn compile_module(&mut self, typed_module: &TypedModule) {
+        let print_i64_fn = self.module.add_function(
+            "print",
+            self.context
+                .void_type()
+                .fn_type(&[self.context.i64_type().into()], false),
+            None,
+        );
+        self.functions.insert("print".to_string(), print_i64_fn);
+
         for declaraion in &typed_module.declarations {
             match declaraion {
                 TypedDeclaration::Function(function) => {
@@ -35,9 +52,12 @@ impl<'ctx> Codegen<'ctx> {
                         .iter()
                         .map(|parameter| self.llvm_basic_type(&parameter.type_).into())
                         .collect();
-                    let fn_type = self
-                        .llvm_basic_type(&function.return_type)
-                        .fn_type(&param_types, false);
+                    let fn_type = match function.return_type.as_ref() {
+                        Type::Unit => self.context.void_type().fn_type(&param_types, false),
+                        _ => self
+                            .llvm_basic_type(&function.return_type)
+                            .fn_type(&param_types, false),
+                    };
                     let fn_value = self.module.add_function(&function.name, fn_type, None);
                     self.functions.insert(function.name.clone(), fn_value);
                 }
@@ -52,7 +72,6 @@ impl<'ctx> Codegen<'ctx> {
             }
         }
 
-        println!("Generated LLVM IR:");
         println!("{}", self.module.print_to_string().to_string());
 
         if let Err(e) = self.module.verify() {
@@ -61,7 +80,7 @@ impl<'ctx> Codegen<'ctx> {
         }
 
         let target_triple = TargetMachine::get_default_triple();
-        Target::initialize_native(&inkwell::targets::InitializationConfig::default())
+        Target::initialize_native(&InitializationConfig::default())
             .expect("Failed to initialize native target");
 
         let target =
@@ -89,32 +108,6 @@ impl<'ctx> Codegen<'ctx> {
                 "notun-cache/program.o".as_ref(),
             )
             .expect("Failed to write object file");
-
-        println!("Object file written to program.o");
-
-        let link_result = Command::new("clang")
-            .args(&[
-                "notun-cache/program.o",
-                "-o",
-                "notun-cache/program",
-                "-fuse-ld=lld",
-            ])
-            .output();
-
-        match link_result {
-            Ok(output) => {
-                if output.status.success() {
-                    println!("Successfully linked executable: ./program");
-                } else {
-                    eprintln!("Linking failed:");
-                    eprintln!("{}", String::from_utf8_lossy(&output.stderr));
-                }
-            }
-            Err(e) => {
-                eprintln!("Failed to run clang: {}", e);
-                eprintln!("Make sure clang and lld are installed");
-            }
-        }
     }
 
     pub fn llvm_basic_type(&self, type_: &Type) -> BasicTypeEnum<'ctx> {
@@ -144,7 +137,14 @@ impl<'ctx> Codegen<'ctx> {
         self.compile_statements(&function.body, fn_value);
         self.env = old_env;
         if !self.is_current_block_terminated() {
-            self.builder.build_unreachable();
+            match function.return_type.as_ref() {
+                Type::Unit => {
+                    self.builder.build_return(None);
+                }
+                _ => {
+                    self.builder.build_unreachable();
+                }
+            }
         }
         fn_value
     }
@@ -169,18 +169,18 @@ impl<'ctx> Codegen<'ctx> {
     fn compile_statement(&mut self, statement: &TypedStatement, fn_value: FunctionValue<'ctx>) {
         match statement {
             TypedStatement::Return { return_value } => {
-                let return_value = &self.compile_expression(return_value);
+                let return_value = &self.compile_expression(return_value).unwrap();
                 self.builder.build_return(Some(return_value));
             }
             TypedStatement::Let { name, type_, value } => {
-                let let_value = self.compile_expression(value);
+                let let_value = self.compile_expression(value).unwrap();
                 let let_type = self.llvm_basic_type(type_);
                 let let_ptr = self.builder.build_alloca(let_type, name).unwrap();
                 self.builder.build_store(let_ptr, let_value).unwrap();
                 self.env.insert(name.clone(), let_ptr);
             }
             TypedStatement::Assignment { lhs, type_, rhs } => {
-                let rhs_value = self.compile_expression(rhs);
+                let rhs_value = self.compile_expression(rhs).unwrap();
                 let ptr = *self.env.get(lhs).unwrap();
                 self.builder.build_store(ptr, rhs_value);
             }
@@ -189,7 +189,7 @@ impl<'ctx> Codegen<'ctx> {
                 then_branch,
                 else_branch,
             } => {
-                let condition = self.compile_expression(condition).into_int_value();
+                let condition = self.compile_expression(condition).unwrap().into_int_value();
                 let then_block = self.context.append_basic_block(fn_value, "then");
                 let else_block = self.context.append_basic_block(fn_value, "else");
                 let merge_block = self.context.append_basic_block(fn_value, "merge");
@@ -218,7 +218,7 @@ impl<'ctx> Codegen<'ctx> {
                 self.builder.build_unconditional_branch(condition_block);
 
                 self.builder.position_at_end(condition_block);
-                let condition = self.compile_expression(condition).into_int_value();
+                let condition = self.compile_expression(condition).unwrap().into_int_value();
                 self.builder
                     .build_conditional_branch(condition, body_block, end_block);
 
@@ -237,37 +237,40 @@ impl<'ctx> Codegen<'ctx> {
         }
     }
 
-    fn compile_expression(&mut self, expression: &TypedExpression) -> BasicValueEnum<'ctx> {
+    fn compile_expression(&mut self, expression: &TypedExpression) -> Option<BasicValueEnum<'ctx>> {
         match expression {
             TypedExpression::Integer { value, type_ } => {
                 let negative = if *value < 0 { true } else { false };
-                self.context
-                    .i64_type()
-                    .const_int(*value as u64, negative)
-                    .into()
+                Some(
+                    self.context
+                        .i64_type()
+                        .const_int(*value as u64, negative)
+                        .into(),
+                )
             }
             TypedExpression::Float { value, type_ } => {
-                self.context.f64_type().const_float(*value).into()
+                Some(self.context.f64_type().const_float(*value).into())
             }
-            TypedExpression::Bool { value, type_ } => self
-                .context
-                .bool_type()
-                .const_int(*value as u64, false)
-                .into(),
+            TypedExpression::Bool { value, type_ } => Some(
+                self.context
+                    .bool_type()
+                    .const_int(*value as u64, false)
+                    .into(),
+            ),
             TypedExpression::BinaryOperation {
                 operator,
                 left,
                 right,
                 type_,
             } => {
-                let left = self.compile_expression(left);
-                let right = self.compile_expression(right);
+                let left = self.compile_expression(left).unwrap();
+                let right = self.compile_expression(right).unwrap();
                 match (left, right) {
                     (BasicValueEnum::IntValue(l), BasicValueEnum::IntValue(r)) => {
-                        self.compile_int_binary_operation(*operator, l, r) // handles integer and boolean values
+                        Some(self.compile_int_binary_operation(*operator, l, r)) // handles integer and boolean values
                     }
                     (BasicValueEnum::FloatValue(l), BasicValueEnum::FloatValue(r)) => {
-                        self.compile_float_binary_operation(*operator, l, r)
+                        Some(self.compile_float_binary_operation(*operator, l, r))
                     }
                     _ => unreachable!(),
                 }
@@ -275,7 +278,7 @@ impl<'ctx> Codegen<'ctx> {
             TypedExpression::Var { name, type_ } => {
                 let let_type = self.llvm_basic_type(type_);
                 let ptr = *self.env.get(name).unwrap();
-                self.builder.build_load(let_type, ptr, name).unwrap()
+                Some(self.builder.build_load(let_type, ptr, name).unwrap())
             }
             TypedExpression::Call {
                 name,
@@ -284,7 +287,7 @@ impl<'ctx> Codegen<'ctx> {
             } => {
                 let arguments: Vec<_> = arguments
                     .iter()
-                    .map(|argument| self.compile_expression(argument).into())
+                    .map(|argument| self.compile_expression(argument).unwrap().into())
                     .collect();
                 self.builder
                     .build_direct_call(
@@ -294,7 +297,7 @@ impl<'ctx> Codegen<'ctx> {
                     )
                     .unwrap()
                     .try_as_basic_value()
-                    .unwrap_basic()
+                    .basic()
             }
             c => unimplemented!("Codegen for {:?} is unimplemented", c),
         }

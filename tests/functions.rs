@@ -11,12 +11,12 @@ fn answer() -> Int64 {
     return 42
 }
 
-fn main() -> Int64 {
-    return answer()
+fn main() {
+    print(answer())
 }
 "#
         ),
-        42
+        "42\n"
     );
 }
 
@@ -29,12 +29,12 @@ fn double(a: Int64) -> Int64 {
     return a * 2
 }
 
-fn main() -> Int64 {
-    return double(21)
+fn main() {
+    print(double(21))
 }
 "#
         ),
-        42
+        "42\n"
     );
 }
 
@@ -47,12 +47,12 @@ fn sum3(a: Int64, b: Int64, c: Int64) -> Int64 {
     return a + b + c
 }
 
-fn main() -> Int64 {
-    return sum3(1, 2, 3)
+fn main() {
+    print(sum3(1, 2, 3))
 }
 "#
         ),
-        6
+        "6\n"
     );
 }
 
@@ -65,12 +65,12 @@ fn subtract(a: Int64, b: Int64) -> Int64 {
     return a - b
 }
 
-fn main() -> Int64 {
-    return subtract(30, 8)
+fn main() {
+    print(subtract(30, 8))
 }
 "#
         ),
-        22
+        "22\n"
     );
 }
 
@@ -83,12 +83,12 @@ fn square(a: Int64) -> Int64 {
     return a * a
 }
 
-fn main() -> Int64 {
-    return square(4) + 2 * square(3)
+fn main() {
+    print(square(4) + 2 * square(3))
 }
 "#
         ),
-        34
+        "34\n"
     );
 }
 
@@ -105,12 +105,12 @@ fn increment(a: Int64) -> Int64 {
     return a + 1
 }
 
-fn main() -> Int64 {
-    return double(increment(double(5)))
+fn main() {
+    print(double(increment(double(5))))
 }
 "#
         ),
-        22
+        "22\n"
     );
 }
 
@@ -123,13 +123,13 @@ fn triple(a: Int64) -> Int64 {
     return a * 3
 }
 
-fn main() -> Int64 {
+fn main() {
     let value: Int64 = triple(7)
-    return value + 1
+    print(value + 1)
 }
 "#
         ),
-        22
+        "22\n"
     );
 }
 
@@ -142,14 +142,14 @@ fn negate_offset(a: Int64) -> Int64 {
     return 100 - a
 }
 
-fn main() -> Int64 {
+fn main() {
     let value: Int64 = 1
     value = negate_offset(90)
-    return value
+    print(value)
 }
 "#
         ),
-        10
+        "10\n"
     );
 }
 
@@ -162,13 +162,13 @@ fn add(a: Int64, b: Int64) -> Int64 {
     return a + b
 }
 
-fn main() -> Int64 {
+fn main() {
     let x: Int64 = 4
-    return add(x * 2, x + 3)
+    print(add(x * 2, x + 3))
 }
 "#
         ),
-        15
+        "15\n"
     );
 }
 
@@ -181,12 +181,12 @@ fn double(a: Int64) -> Int64 {
     return a * 2
 }
 
-fn main() -> Int64 {
-    return double(1) + double(2) + double(3)
+fn main() {
+    print(double(1) + double(2) + double(3))
 }
 "#
         ),
-        12
+        "12\n"
     );
 }
 
@@ -199,16 +199,16 @@ fn is_even(a: Int64) -> Bool {
     return a % 2 == 0
 }
 
-fn main() -> Int64 {
+fn main() {
     if is_even(10) {
-        return 1
+        print(1)
     } else {
-        return 2
+        print(2)
     }
 }
 "#
         ),
-        1
+        "1\n"
     );
 }
 
@@ -225,12 +225,12 @@ fn pick(flag: Bool) -> Int64 {
     }
 }
 
-fn main() -> Int64 {
-    return pick(false)
+fn main() {
+    print(pick(false))
 }
 "#
         ),
-        20
+        "20\n"
     );
 }
 
@@ -243,16 +243,16 @@ fn half(a: Float64) -> Float64 {
     return a / 2.0
 }
 
-fn main() -> Int64 {
+fn main() {
     if half(9.0) > 4.0 {
-        return 1
+        print(1)
     } else {
-        return 2
+        print(2)
     }
 }
 "#
         ),
-        1
+        "1\n"
     );
 }
 
@@ -271,12 +271,12 @@ fn sum_to(n: Int64) -> Int64 {
     return total
 }
 
-fn main() -> Int64 {
-    return sum_to(10)
+fn main() {
+    print(sum_to(10))
 }
 "#
         ),
-        55
+        "55\n"
     );
 }
 
@@ -292,12 +292,12 @@ fn clamp_low(a: Int64) -> Int64 {
     return a
 }
 
-fn main() -> Int64 {
-    return clamp_low(0 - 5) + clamp_low(7)
+fn main() {
+    print(clamp_low(0 - 5) + clamp_low(7))
 }
 "#
         ),
-        7
+        "7\n"
     );
 }
 
@@ -311,14 +311,14 @@ fn consume(a: Int64) -> Int64 {
     return a
 }
 
-fn main() -> Int64 {
+fn main() {
     let x: Int64 = 9
     let ignored: Int64 = consume(x)
-    return x
+    print(x)
 }
 "#
         ),
-        9
+        "9\n"
     );
 }
 
@@ -332,14 +332,14 @@ fn helper(a: Int64) -> Int64 {
     return a + value
 }
 
-fn main() -> Int64 {
+fn main() {
     let value: Int64 = 5
     let ignored: Int64 = helper(2)
-    return value
+    print(value)
 }
 "#
         ),
-        5
+        "5\n"
     );
 }
 
@@ -352,18 +352,18 @@ fn square(a: Int64) -> Int64 {
     return a * a
 }
 
-fn main() -> Int64 {
+fn main() {
     let i: Int64 = 1
     let total: Int64 = 0
     while i <= 4 {
         total = total + square(i)
         i = i + 1
     }
-    return total
+    print(total)
 }
 "#
         ),
-        30
+        "30\n"
     );
 }
 
@@ -376,16 +376,16 @@ fn below_limit(a: Int64) -> Bool {
     return a < 20
 }
 
-fn main() -> Int64 {
+fn main() {
     let i: Int64 = 0
     while below_limit(i) {
         i = i + 3
     }
-    return i
+    print(i)
 }
 "#
         ),
-        21
+        "21\n"
     );
 }
 
@@ -402,12 +402,12 @@ fn factorial(n: Int64) -> Int64 {
     }
 }
 
-fn main() -> Int64 {
-    return factorial(5)
+fn main() {
+    print(factorial(5))
 }
 "#
         ),
-        120
+        "120\n"
     );
 }
 
@@ -424,12 +424,12 @@ fn fib(n: Int64) -> Int64 {
     }
 }
 
-fn main() -> Int64 {
-    return fib(12)
+fn main() {
+    print(fib(12))
 }
 "#
         ),
-        144
+        "144\n"
     );
 }
 
@@ -446,12 +446,12 @@ fn gcd(a: Int64, b: Int64) -> Int64 {
     }
 }
 
-fn main() -> Int64 {
-    return gcd(48, 18)
+fn main() {
+    print(gcd(48, 18))
 }
 "#
         ),
-        6
+        "6\n"
     );
 }
 
@@ -468,12 +468,12 @@ fn countdown(n: Int64) -> Int64 {
     }
 }
 
-fn main() -> Int64 {
-    return countdown(0) + countdown(6)
+fn main() {
+    print(countdown(0) + countdown(6))
 }
 "#
         ),
-        6
+        "6\n"
     );
 }
 
@@ -490,12 +490,12 @@ fn scale(a: Int64) -> Int64 {
     return add(a, a) + add(a, 0)
 }
 
-fn main() -> Int64 {
-    return scale(9)
+fn main() {
+    print(scale(9))
 }
 "#
         ),
-        27
+        "27\n"
     );
 }
 
@@ -504,8 +504,8 @@ fn a_function_can_call_one_declared_later_in_the_file() {
     assert_eq!(
         compile_and_run(
             r#"
-fn main() -> Int64 {
-    return later(3)
+fn main() {
+    print(later(3))
 }
 
 fn later(a: Int64) -> Int64 {
@@ -513,7 +513,7 @@ fn later(a: Int64) -> Int64 {
 }
 "#
         ),
-        12
+        "12\n"
     );
 }
 
@@ -522,8 +522,8 @@ fn forward_references_work_through_a_chain_of_declarations() {
     assert_eq!(
         compile_and_run(
             r#"
-fn main() -> Int64 {
-    return first(2)
+fn main() {
+    print(first(2))
 }
 
 fn first(a: Int64) -> Int64 {
@@ -539,7 +539,7 @@ fn third(a: Int64) -> Int64 {
 }
 "#
         ),
-        51
+        "51\n"
     );
 }
 
@@ -556,12 +556,12 @@ fn pong(a: Int64) -> Int64 {
     return a * 2
 }
 
-fn main() -> Int64 {
-    return ping(5) + pong(ping(1))
+fn main() {
+    print(ping(5) + pong(ping(1)))
 }
 "#
         ),
-        17
+        "17\n"
     );
 }
 
@@ -586,16 +586,16 @@ fn is_odd(n: Int64) -> Bool {
     }
 }
 
-fn main() -> Int64 {
+fn main() {
     if is_even(10) && is_odd(7) {
-        return 1
+        print(1)
     } else {
-        return 2
+        print(2)
     }
 }
 "#
         ),
-        1
+        "1\n"
     );
 }
 
@@ -620,12 +620,12 @@ fn skip(n: Int64) -> Int64 {
     }
 }
 
-fn main() -> Int64 {
-    return take(9)
+fn main() {
+    print(take(9))
 }
 "#
         ),
-        25
+        "25\n"
     );
 }
 
@@ -638,13 +638,13 @@ fn side(a: Int64) -> Int64 {
     return a * 2
 }
 
-fn main() -> Int64 {
+fn main() {
     side(4)
-    return 7
+    print(7)
 }
 "#
         ),
-        7
+        "7\n"
     );
 }
 
@@ -657,13 +657,13 @@ fn nothing() -> Int64 {
     return 1
 }
 
-fn main() -> Int64 {
+fn main() {
     nothing()
-    return 3
+    print(3)
 }
 "#
         ),
-        3
+        "3\n"
     );
 }
 
@@ -676,14 +676,14 @@ fn identity(a: Int64) -> Int64 {
     return a
 }
 
-fn main() -> Int64 {
+fn main() {
     let x: Int64 = 5
     identity(x * 2 + 1)
-    return x
+    print(x)
 }
 "#
         ),
-        5
+        "5\n"
     );
 }
 
@@ -698,16 +698,16 @@ fn helper(a: Int64) -> Int64 {
     return a
 }
 
-fn main() -> Int64 {
+fn main() {
     let scratch: Int64 = 6
     let total: Int64 = 1
     helper(scratch)
     total = total + scratch
-    return total
+    print(total)
 }
 "#
         ),
-        7
+        "7\n"
     );
 }
 
@@ -720,13 +720,13 @@ fn is_positive(a: Int64) -> Bool {
     return a > 0
 }
 
-fn main() -> Int64 {
+fn main() {
     is_positive(3)
-    return 8
+    print(8)
 }
 "#
         ),
-        8
+        "8\n"
     );
 }
 
@@ -739,13 +739,13 @@ fn half(a: Float64) -> Float64 {
     return a / 2.0
 }
 
-fn main() -> Int64 {
+fn main() {
     half(5.0)
-    return 4
+    print(4)
 }
 "#
         ),
-        4
+        "4\n"
     );
 }
 
@@ -758,7 +758,7 @@ fn note(a: Int64) -> Int64 {
     return a
 }
 
-fn main() -> Int64 {
+fn main() {
     let a: Int64 = 3
     if a > 1 {
         note(a)
@@ -767,11 +767,11 @@ fn main() -> Int64 {
         note(0)
         a = 0
     }
-    return a
+    print(a)
 }
 "#
         ),
-        13
+        "13\n"
     );
 }
 
@@ -784,17 +784,17 @@ fn note(a: Int64) -> Int64 {
     return a * 100
 }
 
-fn main() -> Int64 {
+fn main() {
     let i: Int64 = 0
     while i < 5 {
         note(i)
         i = i + 1
     }
-    return i
+    print(i)
 }
 "#
         ),
-        5
+        "5\n"
     );
 }
 
@@ -810,12 +810,12 @@ fn countdown(n: Int64) -> Int64 {
     return n
 }
 
-fn main() -> Int64 {
-    return countdown(4)
+fn main() {
+    print(countdown(4))
 }
 "#
         ),
-        4
+        "4\n"
     );
 }
 
@@ -824,9 +824,9 @@ fn a_call_statement_can_target_a_function_declared_later() {
     assert_eq!(
         compile_and_run(
             r#"
-fn main() -> Int64 {
+fn main() {
     later(2)
-    return 9
+    print(9)
 }
 
 fn later(a: Int64) -> Int64 {
@@ -834,6 +834,6 @@ fn later(a: Int64) -> Int64 {
 }
 "#
         ),
-        9
+        "9\n"
     );
 }
