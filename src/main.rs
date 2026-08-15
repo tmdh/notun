@@ -7,19 +7,20 @@ mod lexer;
 mod parser;
 mod type_checker;
 
+use anyhow::Result;
 use inkwell::context::Context;
 use std::{env, process::Command};
 use type_checker::TypeChecker;
 
 use crate::{codegen::Codegen, lexer::TokenKind::Comma};
 
-fn main() {
+fn main() -> Result<()> {
     let command = env::args().nth(1).unwrap();
     let filename = env::args().nth(2).unwrap();
     let source = std::fs::read_to_string(filename).unwrap();
     let tokenizer = lexer::make_tokenizer(source.as_str());
     let mut parser = parser::Parser::new(tokenizer);
-    let module = parser.parse_module().expect("Error parsing");
+    let module = parser.parse_module()?;
     let mut type_checker = TypeChecker::new();
     let typed_module = type_checker.visit_module(module);
     if type_checker.errors.len() > 0 {
@@ -83,4 +84,5 @@ fn main() {
             println!("Exit status: {}", status.code().unwrap());
         }
     }
+    Ok(())
 }

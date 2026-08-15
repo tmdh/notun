@@ -115,7 +115,14 @@ impl<'ctx> Codegen<'ctx> {
             Type::Int64 => self.context.i64_type().into(),
             Type::Float64 => self.context.f64_type().into(),
             Type::Bool => self.context.bool_type().into(),
-            _ => unimplemented!(),
+            Type::Tuple { types } => {
+                let field_types: Vec<BasicTypeEnum<'_>> =
+                    types.iter().map(|t| self.llvm_basic_type(t)).collect();
+                self.context
+                    .struct_type(&field_types.as_slice(), false)
+                    .into()
+            }
+            e => unimplemented!("{e:?}"),
         }
     }
 
@@ -298,6 +305,47 @@ impl<'ctx> Codegen<'ctx> {
                     .unwrap()
                     .try_as_basic_value()
                     .basic()
+            }
+            TypedExpression::Tuple { values, type_ } => {
+                let tuple_basic_type = self.llvm_basic_type(type_);
+                let ptr = self
+                    .builder
+                    .build_alloca(tuple_basic_type, "tuple")
+                    .unwrap();
+                for (index, value) in values.iter().enumerate() {
+                    let expression = self.compile_expression(value).unwrap();
+                    let value_ptr = self
+                        .builder
+                        .build_struct_gep(
+                            tuple_basic_type,
+                            ptr,
+                            index as u32,
+                            format!("tuple.{index}").as_str(),
+                        )
+                        .unwrap();
+                    self.builder.build_store(value_ptr, expression);
+                }
+                Some(
+                    self.builder
+                        .build_load(tuple_basic_type, ptr, "tuple")
+                        .unwrap(),
+                )
+            }
+            TypedExpression::TupleIndex {
+                tuple,
+                index,
+                type_,
+            } => {
+                let lhs = self.compile_expression(tuple).unwrap();
+                Some(
+                    self.builder
+                        .build_extract_value(
+                            lhs.into_struct_value(),
+                            *index,
+                            format!("tuple.{index}").as_str(),
+                        )
+                        .unwrap(),
+                )
             }
             c => unimplemented!("Codegen for {:?} is unimplemented", c),
         }

@@ -20,6 +20,9 @@ While := 'while' Expression '{' Statement '}'
 
 */
 
+use anyhow::Result;
+use thiserror::Error;
+
 use crate::{
     ast::{
         ArrayTypeAst, BinOp, Constant, ConstructorTypeAst, Declaration, Expression, Function,
@@ -35,16 +38,22 @@ pub struct Parser<T: Iterator<Item = LexResult>> {
     lex_errors: Vec<LexError>,
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum ParseError {
+    #[error("Expected an identifier")]
     ExpectedIdentifier,
+    #[error("Expected {expected:?}, got {found:?}")]
     ExpectedToken {
         expected: TokenKind,
         found: Option<Token>,
     },
+    #[error("Expected an else block")]
     ExpectedElseBlock,
+    #[error("Expected an expression")]
     ExpectedExpression,
+    #[error("Expected a type identifier")]
     ExpectedTypeIdentifier,
+    #[error("Can't put unit type as array dimension")]
     UnitArrayError,
 }
 

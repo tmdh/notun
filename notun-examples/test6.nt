@@ -1,0 +1,8 @@
+fn hello() -> (Int64, Float64, Int64) {
+    return (5, 6.6, 9)
+}
+
+fn main() {
+    let a: Int64 = hello().2
+    print(a)
+}

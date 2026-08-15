@@ -547,6 +547,26 @@ impl TypeChecker {
                     type_: Rc::new(Type::Tuple { types }),
                 })
             }
+            Expression::TupleIndex { tuple, index } => {
+                if let Some(typed_tuple) = self.infer_expression(tuple, env)
+                    && let Some(TypedExpression::Integer { value, .. }) =
+                        self.infer_expression(index, env)
+                {
+                    let type_ = typed_tuple
+                        .type_()
+                        .tuple_types()
+                        .expect("Failed to index into non-tuple expression")
+                        [value as usize]
+                        .clone();
+                    Some(TypedExpression::TupleIndex {
+                        tuple: Box::new(typed_tuple),
+                        index: value as u32,
+                        type_,
+                    })
+                } else {
+                    None
+                }
+            }
             e => todo!("Type checking not implemented for {:#?}", e),
         }
     }
@@ -592,6 +612,13 @@ impl Type {
                 parameters,
                 return_type,
             } => Some((parameters.clone(), return_type.clone())),
+            _ => None,
+        }
+    }
+
+    fn tuple_types(&self) -> Option<Vec<Rc<Type>>> {
+        match self {
+            Type::Tuple { types } => Some(types.clone()),
             _ => None,
         }
     }
@@ -652,7 +679,7 @@ pub struct TypedModule {
 }
 
 impl TypedModule {
-   pub fn add_entry_point(&mut self) {
+    pub fn add_entry_point(&mut self) {
         let main_fn = self
             .declarations
             .iter_mut()
@@ -663,13 +690,12 @@ impl TypedModule {
         if let Some(function) = main_fn {
             match function.return_type.as_ref() {
                 Type::Unit => {
-function.name = "__notun_main".to_string();
+                    function.name = "__notun_main".to_string();
                 }
                 _ => {
                     panic!("The main function only supports unit return type")
                 }
             }
-            
         }
         self.declarations
             .push(TypedDeclaration::Function(TypedFunction {
@@ -790,7 +816,7 @@ pub enum TypedExpression {
     },
     TupleIndex {
         tuple: Box<TypedExpression>,
-        index: Box<TypedExpression>,
+        index: u32,
         type_: Rc<Type>,
     },
     ArraySubscript {

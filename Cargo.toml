@@ -5,7 +5,9 @@ edition = "2024"
 autotests = false
 
 [dependencies]
+anyhow = "1.0.104"
 inkwell = { version = "0.9.0", features = ["llvm22-1"] }
+thiserror = "2.0.20"
 
 [[test]]
 name = "binary_operations"
@@ -22,3 +24,7 @@ path = "tests/conditional.rs"
 [[test]]
 name = "functions"
 path = "tests/functions.rs"
+
+[[test]]
+name = "tuple"
+path = "tests/tuple.rs"

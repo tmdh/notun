@@ -1,5 +1,8 @@
 use std::num::{ParseFloatError, ParseIntError};
 
+use anyhow::Result;
+use thiserror::Error;
+
 #[derive(Debug, PartialEq)]
 pub enum TokenKind {
     LeftParen,
@@ -71,7 +74,9 @@ impl TokenKind {
             | False
             | Plus
             | Minus
-            | Bang => true,
+            | Bang
+            | LeftParen
+            | LeftSquare => true,
             _ => false,
         }
     }
@@ -146,11 +151,15 @@ pub struct Lexer<T: Iterator<Item = (u32, char)>> {
     loc1: u32,
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum LexError {
+    #[error("Multiple decimal points found for a float")]
     MultipleDecimalPointError,
+    #[error("Failed to parse float {0:?}")]
     ParseFloatError(ParseFloatError),
+    #[error("Failed to parse integer {0:?}")]
     ParseIntegerError(ParseIntError),
+    #[error("Unrecognized token {1} found at index {0}")]
     UnrecognizedTokenError(u32, char),
 }
 
