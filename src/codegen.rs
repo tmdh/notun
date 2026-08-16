@@ -188,7 +188,13 @@ impl<'ctx> Codegen<'ctx> {
             }
             TypedStatement::Assignment { lhs, type_, rhs } => {
                 let rhs_value = self.compile_expression(rhs).unwrap();
-                let ptr = *self.env.get(lhs).unwrap();
+                let mut ptr = *self.env.get(&lhs.name).unwrap();
+                let mut current_type = lhs.root_type.clone();
+                for index in &lhs.path {
+                    let struct_type = self.llvm_basic_type(&current_type);
+                    ptr = self.builder.build_struct_gep(struct_type, ptr, *index, "field").unwrap();
+                    current_type = current_type.tuple_types().unwrap()[*index as usize].clone();
+                }
                 self.builder.build_store(ptr, rhs_value);
             }
             TypedStatement::If {

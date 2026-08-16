@@ -291,6 +291,247 @@ fn main() {
 }
 
 #[test]
+fn a_tuple_field_can_be_assigned() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let a: (Int64, Int64) = (1, 2)
+    a.0 = 5
+    print(a.0)
+}
+"#
+        ),
+        "5\n"
+    );
+}
+
+#[test]
+fn assigning_one_field_leaves_the_others_intact() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let triple: (Int64, Int64, Int64) = (1, 20, 300)
+    triple.1 = 50
+    print(triple.0)
+    print(triple.1)
+    print(triple.2)
+}
+"#
+        ),
+        "1\n50\n300\n"
+    );
+}
+
+#[test]
+fn the_last_field_of_a_tuple_can_be_assigned() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let a: (Int64, Int64) = (1, 2)
+    a.1 = 9
+    print(a.0 + a.1)
+}
+"#
+        ),
+        "10\n"
+    );
+}
+
+#[test]
+fn fields_can_be_assigned_one_after_another() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let a: (Int64, Int64) = (0, 0)
+    a.0 = 3
+    a.1 = 4
+    print(a.0 * a.1)
+}
+"#
+        ),
+        "12\n"
+    );
+}
+
+#[test]
+fn a_field_assignment_can_read_the_tuple_it_writes_to() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let a: (Int64, Int64) = (6, 7)
+    a.0 = a.0 + a.1
+    print(a.0)
+}
+"#
+        ),
+        "13\n"
+    );
+}
+
+#[test]
+fn a_field_assignment_can_take_a_call_result() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn double(a: Int64) -> Int64 {
+    return a * 2
+}
+
+fn main() {
+    let a: (Int64, Int64) = (1, 2)
+    a.1 = double(8)
+    print(a.1)
+}
+"#
+        ),
+        "16\n"
+    );
+}
+
+#[test]
+fn a_float64_field_can_be_assigned() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let mixed: (Int64, Float64) = (1, 2.5)
+    mixed.1 = 9.5
+    if mixed.1 > 4.0 {
+        print(1)
+    } else {
+        print(2)
+    }
+    print(mixed.0)
+}
+"#
+        ),
+        "1\n1\n"
+    );
+}
+
+#[test]
+fn a_bool_field_can_be_assigned() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let flagged: (Bool, Int64) = (false, 42)
+    flagged.0 = true
+    if flagged.0 {
+        print(flagged.1)
+    } else {
+        print(0)
+    }
+}
+"#
+        ),
+        "42\n"
+    );
+}
+
+#[test]
+fn an_inner_tuple_can_be_assigned_as_a_whole() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let nested: ((Int64, Int64), Int64) = ((1, 2), 3)
+    nested.0 = (10, 20)
+    let inner: (Int64, Int64) = nested.0
+    print(inner.1 + nested.1)
+}
+"#
+        ),
+        "23\n"
+    );
+}
+
+#[test]
+fn assigning_a_field_does_not_affect_an_earlier_copy() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let a: (Int64, Int64) = (1, 2)
+    let b: (Int64, Int64) = a
+    a.0 = 9
+    print(b.0)
+}
+"#
+        ),
+        "1\n"
+    );
+}
+
+#[test]
+fn a_field_can_be_assigned_inside_a_loop() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let accumulator: (Int64, Int64) = (0, 0)
+    let i: Int64 = 1
+    while i <= 10 {
+        accumulator.0 = accumulator.0 + i
+        accumulator.1 = accumulator.1 + 1
+        i = i + 1
+    }
+    print(accumulator.0)
+    print(accumulator.1)
+}
+"#
+        ),
+        "55\n10\n"
+    );
+}
+
+#[test]
+fn a_field_can_be_assigned_in_both_branches_of_an_if() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let a: (Int64, Int64) = (0, 5)
+    if a.1 > 1 {
+        a.0 = 100
+    } else {
+        a.0 = 200
+    }
+    print(a.0)
+}
+"#
+        ),
+        "100\n"
+    );
+}
+
+#[test]
+fn assigning_a_field_of_a_tuple_parameter_does_not_affect_the_caller() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn clobber(pair: (Int64, Int64)) -> Int64 {
+    pair.0 = 0
+    return pair.0
+}
+
+fn main() {
+    let pair: (Int64, Int64) = (6, 7)
+    let ignored: Int64 = clobber(pair)
+    print(pair.0)
+}
+"#
+        ),
+        "6\n"
+    );
+}
+
+#[test]
 fn a_tuple_can_hold_another_tuple() {
     assert_eq!(
         compile_and_run(
@@ -303,6 +544,190 @@ fn main() {
 "#
         ),
         "50\n"
+    );
+}
+
+#[test]
+fn an_inner_field_can_be_read_through_a_chain_of_indexes() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let nested: ((Int64, Int64), Int64) = ((10, 20), 30)
+    print(nested.0.1)
+}
+"#
+        ),
+        "20\n"
+    );
+}
+
+#[test]
+fn an_inner_field_can_be_assigned_through_a_chain_of_indexes() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let nested: ((Int64, Int64), Int64) = ((10, 20), 30)
+    nested.0.1 = 99
+    print(nested.0.0)
+    print(nested.0.1)
+    print(nested.1)
+}
+"#
+        ),
+        "10\n99\n30\n"
+    );
+}
+
+#[test]
+fn three_levels_of_nesting_can_be_read_and_written() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let deep: (((Int64, Int64), Int64), Int64) = (((1, 2), 3), 4)
+    print(deep.0.0.1)
+    deep.0.0.1 = 20
+    print(deep.0.0.0 + deep.0.0.1 + deep.0.1 + deep.1)
+}
+"#
+        ),
+        "2\n28\n"
+    );
+}
+
+#[test]
+fn a_nested_tuple_can_mix_types_at_every_level() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let nested: ((Int64, Float64), Bool) = ((7, 1.5), false)
+    print(nested.0.0)
+    nested.0.1 = 9.5
+    nested.1 = true
+    if nested.0.1 > 4.0 {
+        print(1)
+    } else {
+        print(2)
+    }
+    if nested.1 {
+        print(3)
+    } else {
+        print(4)
+    }
+}
+"#
+        ),
+        "7\n1\n3\n"
+    );
+}
+
+#[test]
+fn assigning_an_inner_tuple_is_visible_through_a_chained_read() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let nested: ((Int64, Int64), Int64) = ((1, 2), 3)
+    nested.0 = (40, 50)
+    print(nested.0.0 + nested.0.1)
+}
+"#
+        ),
+        "90\n"
+    );
+}
+
+#[test]
+fn a_chained_read_works_on_a_nested_tuple_returned_from_a_function() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn build() -> ((Int64, Int64), Int64) {
+    return ((5, 6), 7)
+}
+
+fn main() {
+    let nested: ((Int64, Int64), Int64) = build()
+    print(nested.0.1)
+}
+"#
+        ),
+        "6\n"
+    );
+}
+
+#[test]
+fn a_chained_read_works_on_a_nested_tuple_parameter() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn inner_sum(nested: ((Int64, Int64), Int64)) -> Int64 {
+    return nested.0.0 + nested.0.1
+}
+
+fn main() {
+    let nested: ((Int64, Int64), Int64) = ((8, 9), 10)
+    print(inner_sum(nested))
+}
+"#
+        ),
+        "17\n"
+    );
+}
+
+#[test]
+fn a_chained_read_is_usable_inside_a_larger_expression() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let nested: ((Int64, Int64), Int64) = ((3, 4), 5)
+    print(nested.0.0 * nested.0.1 + nested.1)
+}
+"#
+        ),
+        "17\n"
+    );
+}
+
+#[test]
+fn an_inner_field_can_be_assigned_inside_a_loop() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let nested: ((Int64, Int64), Int64) = ((0, 0), 0)
+    let i: Int64 = 1
+    while i <= 5 {
+        nested.0.0 = nested.0.0 + i
+        i = i + 1
+    }
+    print(nested.0.0)
+    print(nested.0.1)
+}
+"#
+        ),
+        "15\n0\n"
+    );
+}
+
+#[test]
+fn assigning_an_inner_field_does_not_affect_an_earlier_copy() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let a: ((Int64, Int64), Int64) = ((1, 2), 3)
+    let b: ((Int64, Int64), Int64) = a
+    a.0.1 = 99
+    print(b.0.1)
+}
+"#
+        ),
+        "2\n"
     );
 }
 

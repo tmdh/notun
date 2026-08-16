@@ -276,31 +276,22 @@ impl TypeChecker {
                 }
             }
             Statement::Assignment { lhs, rhs } => {
-                let typed_value = self.infer_expression(rhs, env);
-                let type_from_lhs = env.get(lhs);
-                match (typed_value, type_from_lhs) {
-                    (Some(typed_value), Some(type_from_lhs)) => {
-                        if typed_value.type_() == type_from_lhs.type_ {
-                            return Some(TypedStatement::Assignment {
-                                lhs: lhs.clone(),
-                                type_: type_from_lhs.type_.clone(),
-                                rhs: typed_value,
-                            });
-                        } else {
-                            self.errors.push(TypeError::TypeMismatchAssign {
-                                name: lhs.clone(),
-                                expected: type_from_lhs.type_.clone(),
-                                found: typed_value.type_().clone(),
-                            });
-                            return Some(TypedStatement::Assignment {
-                                lhs: lhs.clone(),
-                                type_: type_from_lhs.type_.clone(),
-                                rhs: typed_value,
-                            });
-                        }
-                    }
-                    _ => None,
+                let lhs_typed = self.infer_expression(lhs, env).unwrap();
+                let rhs_typed = self.infer_expression(rhs, env).unwrap();
+                let place = self.place_from_expression(&lhs_typed)?;
+                let place_type = lhs_typed.type_();
+                if rhs_typed.type_() != place_type {
+                    self.errors.push(TypeError::TypeMismatchAssign {
+                        name: place.name.clone(),
+                        expected: place_type.clone(),
+                        found: rhs_typed.type_(),
+                    });
                 }
+                Some(TypedStatement::Assignment {
+                    lhs: place,
+                    type_: place_type,
+                    rhs: rhs_typed,
+                })
             }
             Statement::Expression(expression) => {
                 let typed_expression = self.infer_expression(expression, env)?;
@@ -358,6 +349,25 @@ impl TypeChecker {
                 Some(TypedStatement::Return {
                     return_value: typed_return_value,
                 })
+            }
+        }
+    }
+
+    fn place_from_expression(&mut self, expression: &TypedExpression) -> Option<TypedPlace> {
+        match expression {
+            TypedExpression::Var { name, type_ } => Some(TypedPlace {
+                name: name.clone(),
+                root_type: type_.clone(),
+                path: vec![],
+            }),
+            TypedExpression::TupleIndex { tuple, index, .. } => {
+                let mut place = self.place_from_expression(tuple)?;
+                place.path.push(*index);
+                Some(place)
+            }
+            _ => {
+                self.errors.push(TypeError::InvalidAssignmentTarget);
+                None
             }
         }
     }
@@ -616,7 +626,7 @@ impl Type {
         }
     }
 
-    fn tuple_types(&self) -> Option<Vec<Rc<Type>>> {
+    pub fn tuple_types(&self) -> Option<Vec<Rc<Type>>> {
         match self {
             Type::Tuple { types } => Some(types.clone()),
             _ => None,
@@ -671,6 +681,7 @@ pub enum TypeError {
         expected: Rc<Type>,
         found: Rc<Type>,
     },
+    InvalidAssignmentTarget,
 }
 
 #[derive(Debug)]
@@ -746,7 +757,7 @@ pub enum TypedStatement {
         value: TypedExpression,
     },
     Assignment {
-        lhs: String,
+        lhs: TypedPlace,
         type_: Rc<Type>,
         rhs: TypedExpression,
     },
@@ -845,4 +856,11 @@ impl TypedExpression {
         };
         type_.clone()
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct TypedPlace {
+    pub name: String,
+    pub root_type: Rc<Type>,
+    pub path: Vec<u32>,
 }

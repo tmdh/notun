@@ -32,7 +32,7 @@ pub enum Statement {
         value: Expression,
     },
     Assignment {
-        lhs: String,
+        lhs: Expression,
         rhs: Expression,
     },
     Expression(Expression),

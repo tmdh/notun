@@ -306,33 +306,27 @@ where
                 self.next_token();
                 Ok(Some(self.parse_return_statement()?))
             }
-            Some(Token {
-                kind: TokenKind::Identifier { name },
-                ..
-            }) => {
-                let name = name.clone();
-                self.next_token();
-                if let Some(Token {
-                    kind: TokenKind::LeftParen,
-                    ..
-                }) = &self.tok0
-                {
-                    self.next_token();
-                    let arguments = self.parse_function_arguments()?;
-                    self.expect_token(TokenKind::RightParen)?;
-                    Ok(Some(Statement::Expression(Expression::Call {
-                        name,
-                        arguments,
-                    })))
-                } else {
-                    Ok(Some(self.parse_assignment_statement(name)?))
-                }
-            }
             Some(c) => {
                 if !c.kind.is_expression_start() {
                     panic!("A statement shouldn't start with {:#?}", c);
                 }
-                Ok(Some(Statement::Expression(self.parse_expression()?)))
+                let expression = self.parse_expression()?;
+                if matches!(
+                    self.tok0,
+                    Some(Token {
+                        kind: TokenKind::Equal,
+                        ..
+                    })
+                ) {
+                    self.next_token();
+                    let rhs = self.parse_expression()?;
+                    Ok(Some(Statement::Assignment {
+                        lhs: expression,
+                        rhs,
+                    }))
+                } else {
+                    Ok(Some(Statement::Expression(expression)))
+                }
             }
             _ => unreachable!(),
         }
@@ -387,12 +381,6 @@ where
     fn parse_return_statement(&mut self) -> Result<Statement, ParseError> {
         let return_value = self.parse_expression()?;
         Ok(Statement::Return { return_value })
-    }
-
-    fn parse_assignment_statement(&mut self, name: String) -> Result<Statement, ParseError> {
-        self.expect_token(TokenKind::Equal)?;
-        let rhs = self.parse_expression()?;
-        Ok(Statement::Assignment { lhs: name, rhs })
     }
 
     fn parse_function_arguments(&mut self) -> Result<Vec<Expression>, ParseError> {
@@ -681,7 +669,7 @@ where
             | BinOp::GreaterEqual => (5, 6),
             BinOp::Add | BinOp::Subtract => (7, 8),
             BinOp::Multiply | BinOp::Divide | BinOp::Modulo => (9, 10),
-            BinOp::Dot => (16, 15),
+            BinOp::Dot => (15, 16),
             _ => return None,
         };
         Some(res)

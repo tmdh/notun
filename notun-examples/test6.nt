@@ -3,6 +3,8 @@ fn hello() -> (Int64, Float64, Int64) {
 }
 
 fn main() {
-    let a: Int64 = hello().2
-    print(a)
+    let a: (Int64, Float64, Int64) = hello()
+    print(a.0)
+    a.0 = 1
+    print(a.0)
 }
