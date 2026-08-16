@@ -353,6 +353,21 @@ impl<'ctx> Codegen<'ctx> {
                         .unwrap(),
                 )
             }
+            TypedExpression::NegateMinus { value, type_ } => {
+                let value = self.compile_expression(value).unwrap();
+                match type_.as_ref() {
+                    &Type::Int64 => Some(self.builder.build_int_neg(value.into_int_value(), "negative").unwrap().into()),
+                    &Type::Float64 => Some(self.builder.build_float_neg(value.into_float_value(), "negative").unwrap().into()),
+                    _ => unreachable!()
+                }
+            }
+            TypedExpression::NegateBang { value, type_ } => {
+                let value = self.compile_expression(value).unwrap();
+                match type_.as_ref() {
+                    &Type::Bool => Some(self.builder.build_not(value.into_int_value(), "not").unwrap().into()),
+                    _ => unreachable!()
+                }
+            }
             c => unimplemented!("Codegen for {:?} is unimplemented", c),
         }
     }
