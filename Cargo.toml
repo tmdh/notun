@@ -28,3 +28,7 @@ path = "tests/functions.rs"
 [[test]]
 name = "tuple"
 path = "tests/tuple.rs"
+
+[[test]]
+name = "arrays"
+path = "tests/arrays.rs"
