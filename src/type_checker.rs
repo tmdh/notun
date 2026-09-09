@@ -1,7 +1,7 @@
 use crate::{
     ast::{
-        BinOp, Constant, Declaration, Expression, Function, Module, Statement, TupleTypeAst,
-        TypeAst,
+        ArrayTypeAst, BinOp, Constant, Declaration, Expression, Function, Module, Statement,
+        TupleTypeAst, TypeAst,
     },
     environment::Environment,
 };
@@ -159,7 +159,16 @@ impl TypeChecker {
                 }
                 Type::Tuple { types }
             }
-            TypeAst::Array(_) => todo!(),
+            TypeAst::Array(ArrayTypeAst { type_, dimensions }) => {
+                let mut array_type = self.type_from_ast(type_)?;
+                for dimension in dimensions.iter().rev() {
+                    array_type = Rc::new(Type::Array {
+                        element_type: array_type,
+                        size: *dimension,
+                    });
+                }
+                return Some(array_type);
+            }
             TypeAst::Unit => Type::Unit,
         };
         Some(Rc::new(type_))
@@ -577,6 +586,58 @@ impl TypeChecker {
                     None
                 }
             }
+            Expression::Array { values } => {
+                let mut typed_values = vec![];
+                let mut element_type: Option<Rc<Type>> = None;
+                for value in values {
+                    let typed_value = self.infer_expression(value, env)?;
+                    match &element_type {
+                        Some(expected) if typed_value.type_() != *expected => {
+                            self.errors.push(TypeError::ArrayElementTypeMismatch {
+                                expected: expected.clone(),
+                                found: typed_value.type_(),
+                            });
+                            return None;
+                        }
+                        Some(_) => {}
+                        None => element_type = Some(typed_value.type_()),
+                    }
+                    typed_values.push(typed_value);
+                }
+                let Some(element_type) = element_type else {
+                    self.errors.push(TypeError::EmptyArrayLiteral);
+                    return None;
+                };
+                let size = typed_values.len() as u64;
+                Some(TypedExpression::Array {
+                    values: typed_values,
+                    type_: Rc::new(Type::Array { element_type, size }),
+                })
+            }
+            Expression::ArraySubscript { array, index } => {
+                let typed_array = self.infer_expression(array, env)?;
+                let typed_index = self.infer_expression(index, env)?;
+                if *typed_index.type_() != Type::Int64 {
+                    self.errors.push(TypeError::TypeMismatchArrayIndex {
+                        found: typed_index.type_(),
+                    });
+                    return None;
+                }
+                let array_type = typed_array.type_();
+                match array_type.as_ref() {
+                    Type::Array { element_type, .. } => Some(TypedExpression::ArraySubscript {
+                        type_: element_type.clone(),
+                        array: Box::new(typed_array),
+                        index: Box::new(typed_index),
+                    }),
+                    _ => {
+                        self.errors.push(TypeError::SubscriptOnNonArray {
+                            found: array_type.clone(),
+                        });
+                        None
+                    }
+                }
+            }
             e => todo!("Type checking not implemented for {:#?}", e),
         }
     }
@@ -608,6 +669,10 @@ pub enum Type {
     },
     Tuple {
         types: Vec<Rc<Type>>,
+    },
+    Array {
+        element_type: Rc<Type>,
+        size: u64,
     },
     Int64,
     Float64,
@@ -682,6 +747,17 @@ pub enum TypeError {
         found: Rc<Type>,
     },
     InvalidAssignmentTarget,
+    ArrayElementTypeMismatch {
+        expected: Rc<Type>,
+        found: Rc<Type>,
+    },
+    EmptyArrayLiteral,
+    TypeMismatchArrayIndex {
+        found: Rc<Type>,
+    },
+    SubscriptOnNonArray {
+        found: Rc<Type>,
+    },
 }
 
 #[derive(Debug)]
@@ -838,7 +914,7 @@ pub enum TypedExpression {
 }
 
 impl TypedExpression {
-    fn type_(&self) -> Rc<Type> {
+    pub fn type_(&self) -> Rc<Type> {
         let type_ = match self {
             TypedExpression::Integer { type_, .. } => type_,
             TypedExpression::Float { type_, .. } => type_,

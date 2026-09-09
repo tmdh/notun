@@ -138,7 +138,7 @@ pub struct TupleTypeAst {
 #[derive(Debug, Clone)]
 pub struct ArrayTypeAst {
     pub type_: Box<TypeAst>,
-    pub dimensions: Vec<Expression>,
+    pub dimensions: Vec<u64>,
 }
 
 #[derive(Debug, Clone)]

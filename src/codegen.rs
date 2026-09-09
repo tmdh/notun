@@ -122,6 +122,11 @@ impl<'ctx> Codegen<'ctx> {
                     .struct_type(&field_types.as_slice(), false)
                     .into()
             }
+            Type::Array { element_type, size } => 
+                self.llvm_basic_type(element_type)
+                .array_type(*size as u32)
+                .into(),
+            
             e => unimplemented!("{e:?}"),
         }
     }
@@ -192,7 +197,10 @@ impl<'ctx> Codegen<'ctx> {
                 let mut current_type = lhs.root_type.clone();
                 for index in &lhs.path {
                     let struct_type = self.llvm_basic_type(&current_type);
-                    ptr = self.builder.build_struct_gep(struct_type, ptr, *index, "field").unwrap();
+                    ptr = self
+                        .builder
+                        .build_struct_gep(struct_type, ptr, *index, "field")
+                        .unwrap();
                     current_type = current_type.tuple_types().unwrap()[*index as usize].clone();
                 }
                 self.builder.build_store(ptr, rhs_value);
@@ -356,17 +364,64 @@ impl<'ctx> Codegen<'ctx> {
             TypedExpression::NegateMinus { value, type_ } => {
                 let value = self.compile_expression(value).unwrap();
                 match type_.as_ref() {
-                    &Type::Int64 => Some(self.builder.build_int_neg(value.into_int_value(), "negative").unwrap().into()),
-                    &Type::Float64 => Some(self.builder.build_float_neg(value.into_float_value(), "negative").unwrap().into()),
-                    _ => unreachable!()
+                    &Type::Int64 => Some(
+                        self.builder
+                            .build_int_neg(value.into_int_value(), "negative")
+                            .unwrap()
+                            .into(),
+                    ),
+                    &Type::Float64 => Some(
+                        self.builder
+                            .build_float_neg(value.into_float_value(), "negative")
+                            .unwrap()
+                            .into(),
+                    ),
+                    _ => unreachable!(),
                 }
             }
             TypedExpression::NegateBang { value, type_ } => {
                 let value = self.compile_expression(value).unwrap();
                 match type_.as_ref() {
-                    &Type::Bool => Some(self.builder.build_not(value.into_int_value(), "not").unwrap().into()),
-                    _ => unreachable!()
+                    &Type::Bool => Some(
+                        self.builder
+                            .build_not(value.into_int_value(), "not")
+                            .unwrap()
+                            .into(),
+                    ),
+                    _ => unreachable!(),
                 }
+            }
+            TypedExpression::Array { values, type_ } => {
+                let array_basic_type = self.llvm_basic_type(type_);
+                let ptr = self.builder.build_alloca(array_basic_type, "array").unwrap();
+                let zero = self.context.i64_type().const_int(0, false);
+
+                for (index, value) in values.iter().enumerate() {
+                    let expression = self.compile_expression(value).unwrap();
+                    let idx = self.context.i64_type().const_int(index as u64, false);
+                    let value_ptr = unsafe {
+                        self.builder.build_gep(array_basic_type, ptr, &[zero, idx], "array_init_elem").unwrap()
+                    };
+                    self.builder.build_store(value_ptr, expression);
+                }
+                Some(self.builder.build_load(array_basic_type, ptr, "array_val").unwrap())
+            }
+            TypedExpression::ArraySubscript { array, index, type_ } => {
+                let array_value = self.compile_expression(array).unwrap();
+                let index_value = self.compile_expression(index).unwrap();
+
+                let element_basic_type = self.llvm_basic_type(type_);
+                let array_basic_type = self.llvm_basic_type(&array.type_());
+
+                let temp_ptr = self.builder.build_alloca(array_basic_type, "temp_array").unwrap();
+                self.builder.build_store(temp_ptr, array_value).unwrap();
+
+                let zero = self.context.i64_type().const_int(0, false);
+
+                let ptr = unsafe {
+                    self.builder.build_gep(array_basic_type, temp_ptr, &[zero, index_value.into_int_value()], "array_elem").unwrap()
+                };
+                Some(self.builder.build_load(element_basic_type, ptr, "array_elem_val").unwrap())
             }
             c => unimplemented!("Codegen for {:?} is unimplemented", c),
         }

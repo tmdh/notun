@@ -55,6 +55,8 @@ pub enum ParseError {
     ExpectedTypeIdentifier,
     #[error("Can't put unit type as array dimension")]
     UnitArrayError,
+    #[error("Expected an integer literal")]
+    ExpectedIntegerLiteral,
 }
 
 impl<T> Parser<T>
@@ -214,7 +216,15 @@ where
                     })
                 ) {
                     self.next_token();
-                    let dimension = self.parse_expression()?;
+                    let dimension = match self.next_token() {
+                        Some(Token {
+                            kind: TokenKind::Integer { value },
+                            ..
+                        }) => {
+                            u64::try_from(value).map_err(|_| ParseError::ExpectedIntegerLiteral)?
+                        }
+                        _ => return Err(ParseError::ExpectedIntegerLiteral),
+                    };
                     self.expect_token(TokenKind::RightSquare)?;
                     match type_ {
                         TypeAst::Constructor(..) | TypeAst::Tuple(..) => {
