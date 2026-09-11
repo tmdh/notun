@@ -371,7 +371,18 @@ impl TypeChecker {
             }),
             TypedExpression::TupleIndex { tuple, index, .. } => {
                 let mut place = self.place_from_expression(tuple)?;
-                place.path.push(*index);
+                place.path.push(PlaceSegment::TupleIndex(*index));
+                Some(place)
+            }
+            TypedExpression::ArraySubscript {
+                array,
+                index,
+                type_,
+            } => {
+                let mut place = self.place_from_expression(array)?;
+                place
+                    .path
+                    .push(PlaceSegment::ArraySubscript((**index).clone()));
                 Some(place)
             }
             _ => {
@@ -938,5 +949,11 @@ impl TypedExpression {
 pub struct TypedPlace {
     pub name: String,
     pub root_type: Rc<Type>,
-    pub path: Vec<u32>,
+    pub path: Vec<PlaceSegment>,
+}
+
+#[derive(Debug, Clone)]
+pub enum PlaceSegment {
+    TupleIndex(u32),
+    ArraySubscript(TypedExpression),
 }

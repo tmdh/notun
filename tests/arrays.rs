@@ -308,3 +308,158 @@ fn main() {
         "5\n"
     );
 }
+#[test]
+fn array_element_can_be_assigned() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let a: Int64[3] = [1, 2, 3]
+    a[0] = 10
+    print(a[0])
+}
+"#
+        ),
+        "10\n"
+    );
+}
+
+#[test]
+fn assigning_one_element_leaves_the_others_intact() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let a: Int64[3] = [1, 2, 3]
+    a[1] = 20
+    print(a[0])
+    print(a[1])
+    print(a[2])
+}
+"#
+        ),
+        "1\n20\n3\n"
+    );
+}
+
+#[test]
+fn the_last_element_of_an_array_can_be_assigned() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let a: Int64[3] = [1, 2, 3]
+    a[2] = 9
+    print(a[2])
+}
+"#
+        ),
+        "9\n"
+    );
+}
+
+#[test]
+fn array_element_can_be_assigned_with_a_computed_index() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let a: Int64[3] = [1, 2, 3]
+    let i: Int64 = 1
+    a[i + 1] = 50
+    print(a[2])
+}
+"#
+        ),
+        "50\n"
+    );
+}
+
+#[test]
+fn array_elements_can_be_assigned_inside_a_while_loop() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let a: Int64[3] = [0, 0, 0]
+    let i: Int64 = 0
+    while i < 3 {
+        a[i] = i * i
+        i = i + 1
+    }
+    print(a[0] + a[1] + a[2])
+}
+"#
+        ),
+        "5\n"
+    );
+}
+
+#[test]
+fn nested_array_element_can_be_assigned() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let m: Int64[2][2] = [[1, 2], [3, 4]]
+    m[0][1] = 99
+    print(m[0][0] + m[0][1] + m[1][1])
+}
+"#
+        ),
+        "104\n"
+    );
+}
+
+#[test]
+fn a_whole_row_of_a_nested_array_can_be_assigned() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let m: Int64[2][2] = [[1, 2], [3, 4]]
+    m[1] = [8, 9]
+    print(m[1][0] + m[1][1])
+}
+"#
+        ),
+        "17\n"
+    );
+}
+
+#[test]
+fn array_element_can_be_assigned_through_a_tuple_field() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn main() {
+    let t: (Int64[2], Int64) = ([1, 2], 5)
+    t.0[1] = 7
+    print(t.0[0] + t.0[1] + t.1)
+}
+"#
+        ),
+        "13\n"
+    );
+}
+
+#[test]
+fn assigning_an_element_of_an_array_parameter_does_not_affect_the_caller() {
+    assert_eq!(
+        compile_and_run(
+            r#"
+fn set(a: Int64[2]) -> Int64 {
+    a[1] = 42
+    return a[0] + a[1]
+}
+
+fn main() {
+    let a: Int64[2] = [1, 2]
+    print(set(a))
+    print(a[1])
+}
+"#
+        ),
+        "43\n2\n"
+    );
+}

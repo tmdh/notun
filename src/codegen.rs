@@ -1,7 +1,8 @@
 use crate::{
     ast::BinOp,
     type_checker::{
-        Type, TypedDeclaration, TypedExpression, TypedFunction, TypedModule, TypedStatement,
+        PlaceSegment, Type, TypedDeclaration, TypedExpression, TypedFunction, TypedModule,
+        TypedStatement,
     },
 };
 use inkwell::{
@@ -195,13 +196,35 @@ impl<'ctx> Codegen<'ctx> {
                 let rhs_value = self.compile_expression(rhs).unwrap();
                 let mut ptr = *self.env.get(&lhs.name).unwrap();
                 let mut current_type = lhs.root_type.clone();
-                for index in &lhs.path {
-                    let struct_type = self.llvm_basic_type(&current_type);
-                    ptr = self
-                        .builder
-                        .build_struct_gep(struct_type, ptr, *index, "field")
-                        .unwrap();
-                    current_type = current_type.tuple_types().unwrap()[*index as usize].clone();
+                for segment in &lhs.path {
+                    match segment {
+                        PlaceSegment::TupleIndex(index) => {
+                            let struct_type = self.llvm_basic_type(&current_type);
+                            ptr = self
+                                .builder
+                                .build_struct_gep(struct_type, ptr, *index, "field")
+                                .unwrap();
+                            current_type =
+                                current_type.tuple_types().unwrap()[*index as usize].clone();
+                        }
+                        PlaceSegment::ArraySubscript(expression) => {
+                            let array_type = self.llvm_basic_type(&current_type);
+                            let idx = self
+                                .compile_expression(expression)
+                                .unwrap()
+                                .into_int_value();
+                            let zero = self.context.i64_type().const_int(0, false);
+                            ptr = unsafe {
+                                self.builder
+                                    .build_gep(array_type, ptr, &[zero, idx], "array_elem")
+                                    .unwrap()
+                            };
+                            let Type::Array { element_type, .. } = current_type.as_ref() else {
+                                unreachable!()
+                            };
+                            current_type = element_type.clone();
+                        }
+                    }
                 }
                 self.builder.build_store(ptr, rhs_value);
             }
